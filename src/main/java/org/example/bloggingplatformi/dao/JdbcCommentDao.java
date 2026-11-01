@@ -1,0 +1,394 @@
+package org.example.bloggingplatformi.dao;
+
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+
+import org.example.bloggingplatformi.db.Database;
+import org.example.bloggingplatformi.model.Comment;
+import org.example.bloggingplatformi.model.CommentStatus;
+
+/**
+ * PostgreSQL implementation of {@link CommentDao}, using an adjacency list
+ * ({@code parent_comment_id}) and recursive CTEs to walk it.
+ *
+ * <p>The {@code path} and {@code depth} that {@link Comment} carries are not
+ * stored here; they are computed inside the recursive query. That is the
+ * structural difference from {@link MongoCommentDao}, which stores a
+ * materialized path and reads a subtree with one indexed prefix match: the
+ * relational side pays per level of recursion at read time, the document side
+ * pays at write time by maintaining the path.
+ */
+public class JdbcCommentDao implements CommentDao {
+
+    private static final String SELECT_BASE = """
+            SELECT c.comment_id, c.post_id, c.author_id, c.parent_comment_id,
+                   c.body, c.status, c.created_at, c.updated_at,
+                   u.display_name AS author_name
+              FROM comments c
+              LEFT JOIN users u ON u.user_id = c.author_id
+            """;
+
+    @Override
+    public String storeName() {
+        return "PostgreSQL";
+    }
+
+    @Override
+    public Optional<Comment> findById(String commentId) {
+        Long id = parseId(commentId);
+        if (id == null) {
+            return Optional.empty();
+        }
+        return Database.withConnection(connection -> {
+            try (PreparedStatement ps =
+                         connection.prepareStatement(SELECT_BASE + " WHERE c.comment_id = ?")) {
+                ps.setLong(1, id);
+                try (ResultSet rs = ps.executeQuery()) {
+                    return rs.next() ? Optional.of(map(rs, 0)) : Optional.<Comment>empty();
+                }
+            } catch (SQLException e) {
+                throw SqlSupport.translate(e, "Comment");
+            }
+        });
+    }
+
+    @Override
+    public List<Comment> findByPostId(long postId, boolean includeHidden) {
+        // The recursive CTE computes depth and a sortable path in one pass.
+        // Ordering by the array of ancestor ids is what puts every reply
+        // directly beneath its parent rather than merely in date order.
+        String sql = """
+                WITH RECURSIVE thread AS (
+                    SELECT c.comment_id, c.post_id, c.author_id, c.parent_comment_id,
+                           c.body, c.status, c.created_at, c.updated_at,
+                           0 AS depth,
+                           ARRAY[c.created_at] AS sort_path,
+                           ''::text AS ancestor_path
+                      FROM comments c
+                     WHERE c.post_id = ? AND c.parent_comment_id IS NULL
+                    UNION ALL
+                    SELECT c.comment_id, c.post_id, c.author_id, c.parent_comment_id,
+                           c.body, c.status, c.created_at, c.updated_at,
+                           t.depth + 1,
+                           t.sort_path || c.created_at,
+                           t.ancestor_path || t.comment_id::text || '/'
+                      FROM comments c
+                      JOIN thread t ON c.parent_comment_id = t.comment_id
+                )
+                SELECT t.*, u.display_name AS author_name
+                  FROM thread t
+                  LEFT JOIN users u ON u.user_id = t.author_id
+                 WHERE (? OR t.status = 'VISIBLE')
+                 ORDER BY t.sort_path, t.comment_id
+                """;
+        return Database.withConnection(connection -> {
+            try (PreparedStatement ps = connection.prepareStatement(sql)) {
+                ps.setLong(1, postId);
+                ps.setBoolean(2, includeHidden);
+                return mapThread(ps);
+            } catch (SQLException e) {
+                throw SqlSupport.translate(e, "Comment");
+            }
+        });
+    }
+
+    @Override
+    public List<Comment> findReplies(String parentId) {
+        Long id = parseId(parentId);
+        if (id == null) {
+            return List.of();
+        }
+        return Database.withConnection(connection -> {
+            try (PreparedStatement ps = connection.prepareStatement(
+                    SELECT_BASE + " WHERE c.parent_comment_id = ? ORDER BY c.created_at")) {
+                ps.setLong(1, id);
+                return mapAll(ps, 0);
+            } catch (SQLException e) {
+                throw SqlSupport.translate(e, "Comment");
+            }
+        });
+    }
+
+    @Override
+    public List<Comment> findSubtree(String rootCommentId) {
+        Long id = parseId(rootCommentId);
+        if (id == null) {
+            return List.of();
+        }
+        String sql = """
+                WITH RECURSIVE subtree AS (
+                    SELECT c.comment_id, c.post_id, c.author_id, c.parent_comment_id,
+                           c.body, c.status, c.created_at, c.updated_at, 0 AS depth
+                      FROM comments c
+                     WHERE c.comment_id = ?
+                    UNION ALL
+                    SELECT c.comment_id, c.post_id, c.author_id, c.parent_comment_id,
+                           c.body, c.status, c.created_at, c.updated_at, s.depth + 1
+                      FROM comments c
+                      JOIN subtree s ON c.parent_comment_id = s.comment_id
+                )
+                SELECT s.*, u.display_name AS author_name
+                  FROM subtree s
+                  LEFT JOIN users u ON u.user_id = s.author_id
+                 ORDER BY s.depth, s.created_at
+                """;
+        return Database.withConnection(connection -> {
+            try (PreparedStatement ps = connection.prepareStatement(sql)) {
+                ps.setLong(1, id);
+                return mapThread(ps);
+            } catch (SQLException e) {
+                throw SqlSupport.translate(e, "Comment");
+            }
+        });
+    }
+
+    @Override
+    public List<Comment> findByAuthor(long authorId, int limit) {
+        return Database.withConnection(connection -> {
+            try (PreparedStatement ps = connection.prepareStatement(
+                    SELECT_BASE + " WHERE c.author_id = ? ORDER BY c.created_at DESC LIMIT ?")) {
+                ps.setLong(1, authorId);
+                ps.setInt(2, Math.max(1, limit));
+                return mapAll(ps, 0);
+            } catch (SQLException e) {
+                throw SqlSupport.translate(e, "Comment");
+            }
+        });
+    }
+
+    @Override
+    public List<Comment> search(String keyword, int limit) {
+        if (keyword == null || keyword.isBlank()) {
+            return List.of();
+        }
+        // ILIKE with a leading wildcard, which only a trigram index can serve.
+        // The relational side has no text index on comments.body, so this is a
+        // sequential scan by design: Phase 4 contrasts it with the Mongo text
+        // index rather than pretending the two are equivalent.
+        return Database.withConnection(connection -> {
+            try (PreparedStatement ps = connection.prepareStatement(
+                    SELECT_BASE + " WHERE c.body ILIKE ? ORDER BY c.created_at DESC LIMIT ?")) {
+                ps.setString(1, "%" + keyword.strip() + "%");
+                ps.setInt(2, Math.max(1, limit));
+                return mapAll(ps, 0);
+            } catch (SQLException e) {
+                throw SqlSupport.translate(e, "Comment");
+            }
+        });
+    }
+
+    @Override
+    public List<Comment> findForModeration(int limit) {
+        return Database.withConnection(connection -> {
+            try (PreparedStatement ps = connection.prepareStatement(
+                    SELECT_BASE + " WHERE c.status <> 'VISIBLE' ORDER BY c.created_at DESC LIMIT ?")) {
+                ps.setInt(1, Math.max(1, limit));
+                return mapAll(ps, 0);
+            } catch (SQLException e) {
+                throw SqlSupport.translate(e, "Comment");
+            }
+        });
+    }
+
+    @Override
+    public long countByPostId(long postId, boolean includeHidden) {
+        String sql = "SELECT COUNT(*) FROM comments WHERE post_id = ? AND (? OR status = 'VISIBLE')";
+        return Database.withConnection(connection -> {
+            try (PreparedStatement ps = connection.prepareStatement(sql)) {
+                ps.setLong(1, postId);
+                ps.setBoolean(2, includeHidden);
+                try (ResultSet rs = ps.executeQuery()) {
+                    return rs.next() ? rs.getLong(1) : 0L;
+                }
+            } catch (SQLException e) {
+                throw SqlSupport.translate(e, "Comment");
+            }
+        });
+    }
+
+    @Override
+    public long count() {
+        return Database.withConnection(connection -> {
+            try (PreparedStatement ps = connection.prepareStatement("SELECT COUNT(*) FROM comments");
+                 ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getLong(1) : 0L;
+            } catch (SQLException e) {
+                throw SqlSupport.translate(e, "Comment");
+            }
+        });
+    }
+
+    @Override
+    public String insert(Comment comment) {
+        String sql = """
+                INSERT INTO comments (post_id, author_id, parent_comment_id, body, status)
+                VALUES (?, ?, ?, ?, ?)
+                """;
+        return Database.withConnection(connection -> {
+            try (PreparedStatement ps =
+                         connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+                ps.setLong(1, comment.postId());
+                SqlSupport.setNullableLong(ps, 2, comment.authorId());
+                SqlSupport.setNullableLong(ps, 3, parseId(comment.parentId()));
+                ps.setString(4, comment.body());
+                ps.setString(5, comment.status().name());
+                ps.executeUpdate();
+                return String.valueOf(SqlSupport.generatedKey(ps));
+            } catch (SQLException e) {
+                throw SqlSupport.translate(e, "Comment");
+            }
+        });
+    }
+
+    @Override
+    public boolean updateBody(String commentId, String newBody) {
+        Long id = parseId(commentId);
+        if (id == null) {
+            return false;
+        }
+        return Database.withConnection(connection -> {
+            try (PreparedStatement ps = connection.prepareStatement(
+                    "UPDATE comments SET body = ? WHERE comment_id = ?")) {
+                ps.setString(1, newBody);
+                ps.setLong(2, id);
+                return ps.executeUpdate() > 0;
+            } catch (SQLException e) {
+                throw SqlSupport.translate(e, "Comment");
+            }
+        });
+    }
+
+    @Override
+    public boolean updateStatus(String commentId, CommentStatus status) {
+        Long id = parseId(commentId);
+        if (id == null) {
+            return false;
+        }
+        return Database.withConnection(connection -> {
+            try (PreparedStatement ps = connection.prepareStatement(
+                    "UPDATE comments SET status = ? WHERE comment_id = ?")) {
+                ps.setString(1, status.name());
+                ps.setLong(2, id);
+                return ps.executeUpdate() > 0;
+            } catch (SQLException e) {
+                throw SqlSupport.translate(e, "Comment");
+            }
+        });
+    }
+
+    @Override
+    public long deleteWithReplies(String commentId) {
+        Long id = parseId(commentId);
+        if (id == null) {
+            return 0;
+        }
+        // Counting the subtree first, then deleting the root, so the return
+        // value matches MongoCommentDao's. The replies themselves are removed
+        // by ON DELETE CASCADE on fk_comments_parent, not by this statement.
+        return Database.inTransaction(connection -> {
+            long affected = 0;
+            String countSql = """
+                    WITH RECURSIVE subtree AS (
+                        SELECT comment_id FROM comments WHERE comment_id = ?
+                        UNION ALL
+                        SELECT c.comment_id FROM comments c
+                          JOIN subtree s ON c.parent_comment_id = s.comment_id
+                    )
+                    SELECT COUNT(*) FROM subtree
+                    """;
+            try (PreparedStatement ps = connection.prepareStatement(countSql)) {
+                ps.setLong(1, id);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) {
+                        affected = rs.getLong(1);
+                    }
+                }
+            }
+            try (PreparedStatement ps =
+                         connection.prepareStatement("DELETE FROM comments WHERE comment_id = ?")) {
+                ps.setLong(1, id);
+                return ps.executeUpdate() > 0 ? affected : 0L;
+            }
+        });
+    }
+
+    @Override
+    public long deleteByPostId(long postId) {
+        return Database.withConnection(connection -> {
+            try (PreparedStatement ps =
+                         connection.prepareStatement("DELETE FROM comments WHERE post_id = ?")) {
+                ps.setLong(1, postId);
+                return (long) ps.executeUpdate();
+            } catch (SQLException e) {
+                throw SqlSupport.translate(e, "Comment");
+            }
+        });
+    }
+
+    @Override
+    public long renameAuthor(long authorId, String newDisplayName) {
+        // Nothing to do: the relational model stores the name once, in users,
+        // and every read reaches it by join. This is the cost the document
+        // store pays for avoiding that join.
+        return 0;
+    }
+
+    /** Parses the string id back to the BIGINT the schema uses. */
+    private static Long parseId(String commentId) {
+        if (commentId == null || commentId.isBlank()) {
+            return null;
+        }
+        try {
+            return Long.parseLong(commentId.strip());
+        } catch (NumberFormatException e) {
+            // A Mongo ObjectId reaching this DAO means the two stores were
+            // mixed; treating it as "not found" beats a NumberFormatException
+            // surfacing from a UI click.
+            return null;
+        }
+    }
+
+    private List<Comment> mapAll(PreparedStatement ps, int depth) throws SQLException {
+        try (ResultSet rs = ps.executeQuery()) {
+            List<Comment> comments = new ArrayList<>();
+            while (rs.next()) {
+                comments.add(map(rs, depth));
+            }
+            return comments;
+        }
+    }
+
+    /** For the recursive queries, which carry a computed depth column. */
+    private List<Comment> mapThread(PreparedStatement ps) throws SQLException {
+        try (ResultSet rs = ps.executeQuery()) {
+            List<Comment> comments = new ArrayList<>();
+            while (rs.next()) {
+                comments.add(map(rs, rs.getInt("depth")));
+            }
+            return comments;
+        }
+    }
+
+    private static Comment map(ResultSet rs, int depth) throws SQLException {
+        Long parentId = SqlSupport.getNullableLong(rs, "parent_comment_id");
+        return new Comment(
+                String.valueOf(rs.getLong("comment_id")),
+                rs.getLong("post_id"),
+                SqlSupport.getNullableLong(rs, "author_id"),
+                rs.getString("author_name"),
+                parentId == null ? null : String.valueOf(parentId),
+                Comment.ROOT_PATH,
+                depth,
+                rs.getString("body"),
+                CommentStatus.from(rs.getString("status")),
+                Map.of(),
+                SqlSupport.getOffsetDateTime(rs, "created_at"),
+                SqlSupport.getOffsetDateTime(rs, "updated_at"));
+    }
+}
