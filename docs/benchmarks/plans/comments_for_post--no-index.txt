@@ -1,0 +1,21 @@
+-- comments_for_post (no index)
+-- SELECT comment_id, body, created_at FROM comments WHERE post_id = ? ORDER BY created_at
+-- parameters: 24189
+Gather Merge  (cost=15444.30..15445.11 rows=7 width=77) (actual time=286.341..332.299 rows=13.00 loops=1)
+  Workers Planned: 2
+  Workers Launched: 2
+  Buffers: shared hit=580 read=10659
+  ->  Sort  (cost=14444.27..14444.28 rows=3 width=77) (actual time=140.339..140.341 rows=4.33 loops=3)
+        Sort Key: created_at
+        Sort Method: quicksort  Memory: 26kB
+        Buffers: shared hit=580 read=10659
+        Worker 0:  Sort Method: quicksort  Memory: 25kB
+        Worker 1:  Sort Method: quicksort  Memory: 25kB
+        ->  Parallel Seq Scan on comments  (cost=0.00..14444.25 rows=3 width=77) (actual time=51.392..140.042 rows=4.33 loops=3)
+              Filter: (post_id = '24189'::bigint)
+              Rows Removed by Filter: 209996
+              Buffers: shared hit=504 read=10659
+Planning:
+  Buffers: shared hit=18
+Planning Time: 0.588 ms
+Execution Time: 332.332 ms

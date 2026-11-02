@@ -1,0 +1,11 @@
+-- title_exact_case_insensitive (indexed)
+-- SELECT post_id FROM posts WHERE LOWER(title) = LOWER(?)
+-- parameters: SCALING MATERIALIZED PATHS, PART 7
+Index Scan using idx_posts_title_lower on posts  (cost=0.42..20.49 rows=4 width=8) (actual time=1.019..1.044 rows=2.00 loops=1)
+  Index Cond: (lower((title)::text) = 'scaling materialized paths, part 7'::text)
+  Index Searches: 1
+  Buffers: shared read=5
+Planning:
+  Buffers: shared hit=3
+Planning Time: 0.283 ms
+Execution Time: 1.061 ms

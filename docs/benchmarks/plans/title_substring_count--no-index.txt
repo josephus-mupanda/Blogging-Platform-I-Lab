@@ -1,0 +1,11 @@
+-- title_substring_count (no index)
+-- SELECT COUNT(*) FROM posts WHERE title ILIKE ?
+-- parameters: %eviction%
+Aggregate  (cost=14553.03..14553.05 rows=1 width=8) (actual time=299.927..299.928 rows=1.00 loops=1)
+  Buffers: shared hit=10029 read=3269
+  ->  Seq Scan on posts  (cost=0.00..14548.00 rows=2014 width=0) (actual time=0.404..298.940 rows=2458.00 loops=1)
+        Filter: ((title)::text ~~* '%eviction%'::text)
+        Rows Removed by Filter: 97542
+        Buffers: shared hit=10029 read=3269
+Planning Time: 1.329 ms
+Execution Time: 299.961 ms

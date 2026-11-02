@@ -1,0 +1,17 @@
+-- title_substring_count (indexed)
+-- SELECT COUNT(*) FROM posts WHERE title ILIKE ?
+-- parameters: %eviction%
+Aggregate  (cost=5504.18..5504.19 rows=1 width=8) (actual time=47.471..47.473 rows=1.00 loops=1)
+  Buffers: shared hit=173 read=2142 written=797
+  ->  Bitmap Heap Scan on posts  (cost=90.76..5499.14 rows=2014 width=0) (actual time=3.911..46.749 rows=2458.00 loops=1)
+        Recheck Cond: ((title)::text ~~* '%eviction%'::text)
+        Heap Blocks: exact=2269
+        Buffers: shared hit=173 read=2142 written=797
+        ->  Bitmap Index Scan on idx_posts_title_trgm  (cost=0.00..90.26 rows=2014 width=0) (actual time=3.076..3.076 rows=2458.00 loops=1)
+              Index Cond: ((title)::text ~~* '%eviction%'::text)
+              Index Searches: 1
+              Buffers: shared hit=44 read=2 written=2
+Planning:
+  Buffers: shared hit=6 read=1 written=1
+Planning Time: 0.497 ms
+Execution Time: 47.520 ms

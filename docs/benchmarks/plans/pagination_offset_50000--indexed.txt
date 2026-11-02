@@ -1,0 +1,13 @@
+-- pagination_offset_50000 (indexed)
+-- SELECT post_id, title, created_at FROM posts ORDER BY created_at DESC, post_id DESC LIMIT 20 OFFSET ?
+-- parameters: 50000
+Limit  (cost=22728.11..22728.16 rows=20 width=51) (actual time=276.512..276.522 rows=20.00 loops=1)
+  Buffers: shared hit=13298, temp read=492 written=800
+  ->  Sort  (cost=22603.11..22853.11 rows=100000 width=51) (actual time=250.042..273.095 rows=50020.00 loops=1)
+        Sort Key: created_at DESC, post_id DESC
+        Sort Method: external merge  Disk: 6376kB
+        Buffers: shared hit=13298, temp read=492 written=800
+        ->  Seq Scan on posts  (cost=0.00..14298.00 rows=100000 width=51) (actual time=0.020..97.193 rows=100000.00 loops=1)
+              Buffers: shared hit=13298
+Planning Time: 0.238 ms
+Execution Time: 292.014 ms

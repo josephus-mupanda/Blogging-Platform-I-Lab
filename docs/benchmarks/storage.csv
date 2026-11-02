@@ -1,0 +1,5 @@
+store,collection,data_bytes,index_bytes,total_bytes,index_count
+PostgreSQL,comments,91504640,94183424,185688064,6
+PostgreSQL,reviews,27090944,25575424,52666368,4
+MongoDB,comments,63754240,84557824,148312064,7
+MongoDB,reviews,12636160,10952704,23588864,4

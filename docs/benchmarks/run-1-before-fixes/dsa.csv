@@ -1,0 +1,10 @@
+operation,variant,iterations,median_ms,mean_ms,min_ms,max_ms,p95_ms
+build_inverted_index_100k_titles,InvertedIndex,5,677.3772,890.0117,558.5480,1445.0323,1445.0323
+title_keyword_search_100k,inverted index,201,0.2841,0.3221,0.1221,1.2608,0.6331
+title_keyword_search_100k,linear scan,21,282.5425,466.6872,157.4118,1789.8418,1084.9258
+slug_lookup_x100,HashMap,201,0.0253,0.0227,0.0066,0.1787,0.0341
+slug_lookup_x100,linear scan,11,245.3537,219.8974,114.4193,311.2246,311.2246
+sort_100k_by_views,Sorting.mergeSort,15,123.7242,144.2703,85.2032,215.9186,215.9186
+sort_100k_by_views,List.sort (TimSort),15,295.0643,290.2322,207.2152,440.3444,440.3444
+id_search_x1000_sorted_100k,Sorting.binarySearch,201,0.5310,1.5659,0.2933,40.2305,5.1157
+id_search_x1000_sorted_100k,Sorting.linearSearch,11,265.6887,284.1326,215.6024,394.8924,394.8924

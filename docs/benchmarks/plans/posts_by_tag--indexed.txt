@@ -1,0 +1,19 @@
+-- posts_by_tag (indexed)
+-- SELECT p.post_id, p.title FROM posts p WHERE EXISTS (SELECT 1 FROM post_tags pt WHERE pt.post_id = p.post_id AND pt.tag_id = ?) ORDER BY p.created_at DESC LIMIT 20
+-- parameters: 64
+Limit  (cost=0.71..1678.97 rows=20 width=51) (actual time=2.551..21.571 rows=20.00 loops=1)
+  Buffers: shared hit=4967 read=399 written=190
+  ->  Nested Loop  (cost=0.71..103632.87 rows=1235 width=51) (actual time=2.550..21.563 rows=20.00 loops=1)
+        Buffers: shared hit=4967 read=399 written=190
+        ->  Index Scan using idx_posts_created_at on posts p  (cost=0.29..55792.93 rows=100000 width=51) (actual time=0.057..16.504 rows=1340.00 loops=1)
+              Index Searches: 1
+              Buffers: shared hit=954 read=391 written=190
+        ->  Index Only Scan using idx_post_tags_tag_id on post_tags pt  (cost=0.42..0.48 rows=1 width=8) (actual time=0.003..0.003 rows=0.01 loops=1340)
+              Index Cond: ((tag_id = 64) AND (post_id = p.post_id))
+              Heap Fetches: 0
+              Index Searches: 1340
+              Buffers: shared hit=4013 read=8
+Planning:
+  Buffers: shared hit=19 read=10
+Planning Time: 4.396 ms
+Execution Time: 21.618 ms

@@ -1,0 +1,31 @@
+scenario,phase,plan_nodes,explain_execution_ms
+posts_by_author,no index,"Limit > Sort > Seq Scan",630.613
+published_feed,no index,"Limit > Gather Merge > Sort > Parallel Seq Scan",4393.491
+most_viewed_published,no index,"Limit > Gather Merge > Sort > Parallel Seq Scan",340.276
+title_exact_case_insensitive,no index,"Seq Scan",253.494
+title_substring_count,no index,"Aggregate > Seq Scan",299.961
+posts_by_tag,no index,"Limit > Gather Merge > Sort > Nested Loop > Parallel Seq Scan > Index Scan using pk_posts",175.087
+comments_for_post,no index,"Gather Merge > Sort > Parallel Seq Scan",332.332
+replies_to_comment,no index,"Sort > Gather > Parallel Seq Scan",195.949
+comments_by_author,no index,"Limit > Gather Merge > Sort > Parallel Seq Scan",169.844
+moderation_queue,no index,"Limit > Gather Merge > Sort > Parallel Seq Scan",457.786
+review_stats_for_page,no index,"GroupAggregate > Sort > Bitmap Heap Scan > Bitmap Index Scan",12.395
+reviews_by_reviewer,no index,"Limit > Gather Merge > Sort > Parallel Seq Scan",283.450
+fts_old_dao_expression,no index,"Finalize Aggregate > Gather > Partial Aggregate > Parallel Seq Scan",14933.137
+fts_index_expression,no index,"Finalize Aggregate > Gather > Partial Aggregate > Parallel Seq Scan",15632.540
+posts_by_author,indexed,"Limit > Sort > Bitmap Heap Scan > Bitmap Index Scan",1.008
+published_feed,indexed,"Limit > Index Scan using idx_posts_status_published",1.094
+most_viewed_published,indexed,"Limit > Index Scan using idx_posts_views_published",0.503
+title_exact_case_insensitive,indexed,"Index Scan using idx_posts_title_lower",1.061
+title_substring_count,indexed,"Aggregate > Bitmap Heap Scan > Bitmap Index Scan",47.520
+posts_by_tag,indexed,"Limit > Nested Loop > Index Scan using idx_posts_created_at > Index Only Scan using idx_post_tags_tag_id",21.618
+comments_for_post,indexed,"Sort > Bitmap Heap Scan > Bitmap Index Scan",0.617
+replies_to_comment,indexed,"Sort > Index Scan using idx_comments_parent",0.264
+comments_by_author,indexed,"Limit > Sort > Bitmap Heap Scan > Bitmap Index Scan",4.338
+moderation_queue,indexed,"Limit > Index Scan using idx_comments_moderation",1.222
+review_stats_for_page,indexed,"GroupAggregate > Index Only Scan using idx_reviews_post_rating",0.717
+reviews_by_reviewer,indexed,"Limit > Index Scan using idx_reviews_reviewer",2.738
+fts_old_dao_expression,indexed,"Finalize Aggregate > Gather > Partial Aggregate > Parallel Seq Scan",14241.289
+fts_index_expression,indexed,"Aggregate > Bitmap Heap Scan > Bitmap Index Scan",6.420
+pagination_offset_50000,indexed,"Limit > Sort > Seq Scan",292.014
+pagination_keyset_50000,indexed,"Limit > Incremental Sort > Index Scan using idx_posts_created_at",0.139

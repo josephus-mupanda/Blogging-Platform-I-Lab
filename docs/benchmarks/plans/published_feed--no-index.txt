@@ -1,0 +1,23 @@
+-- published_feed (no index)
+-- SELECT post_id, title, published_at FROM posts WHERE status = 'PUBLISHED' ORDER BY published_at DESC LIMIT 20
+-- parameters: 
+Limit  (cost=15705.44..15707.77 rows=20 width=51) (actual time=4172.906..4393.075 rows=20.00 loops=1)
+  Buffers: shared hit=2783 read=10601
+  ->  Gather Merge  (cost=15705.44..25018.45 rows=79963 width=51) (actual time=4172.904..4393.070 rows=20.00 loops=1)
+        Workers Planned: 2
+        Workers Launched: 2
+        Buffers: shared hit=2783 read=10601
+        ->  Sort  (cost=14705.41..14788.71 rows=33318 width=51) (actual time=89.647..89.651 rows=6.67 loops=3)
+              Sort Key: published_at DESC
+              Sort Method: top-N heapsort  Memory: 28kB
+              Buffers: shared hit=2783 read=10601
+              Worker 0:  Sort Method: quicksort  Memory: 25kB
+              Worker 1:  Sort Method: quicksort  Memory: 25kB
+              ->  Parallel Seq Scan on posts  (cost=0.00..13818.83 rows=33318 width=51) (actual time=0.037..77.042 rows=26666.67 loops=3)
+                    Filter: ((status)::text = 'PUBLISHED'::text)
+                    Rows Removed by Filter: 6667
+                    Buffers: shared hit=2697 read=10601
+Planning:
+  Buffers: shared hit=6 dirtied=1
+Planning Time: 0.161 ms
+Execution Time: 4393.491 ms

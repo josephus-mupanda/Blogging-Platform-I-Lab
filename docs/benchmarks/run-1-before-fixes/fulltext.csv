@@ -1,0 +1,7 @@
+operation,variant,iterations,median_ms,mean_ms,min_ms,max_ms,p95_ms
+fts_old_dao_expression,no index,5,14578.0856,15532.2120,9793.3983,22734.1865,22734.1865
+fts_index_expression,no index,5,9313.6934,9417.7709,9141.9992,10006.2513,10006.2513
+dao_search_keyword,no index,5,27034.4634,26425.8480,24528.5740,27476.4975,27476.4975
+fts_old_dao_expression,indexed,5,10841.7701,10788.9562,10493.9865,11013.6874,11013.6874
+fts_index_expression,indexed,21,1.2600,1.2629,0.4465,2.3422,1.7228
+dao_search_keyword,indexed,21,8.0969,8.2564,6.8492,12.5792,9.7914

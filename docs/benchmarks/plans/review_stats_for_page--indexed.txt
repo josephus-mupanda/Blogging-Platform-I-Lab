@@ -1,0 +1,15 @@
+-- review_stats_for_page (indexed)
+-- SELECT post_id, COUNT(*), ROUND(AVG(rating)::numeric, 2) FROM reviews WHERE post_id = ANY(?) GROUP BY post_id
+-- parameters: [15434, 5748, 52137, 68364, 90577, 90362, 23511, 5958, 15628, 56185, 76443, 49375, 43728, 89251, 97293, 38341, 58409, 61576, 19493, 90260]
+GroupAggregate  (cost=0.42..91.09 rows=69 width=48) (actual time=0.123..0.688 rows=18.00 loops=1)
+  Group Key: post_id
+  Buffers: shared hit=35 read=26
+  ->  Index Only Scan using idx_reviews_post_rating on reviews  (cost=0.42..89.54 rows=69 width=10) (actual time=0.085..0.621 rows=40.00 loops=1)
+        Index Cond: (post_id = ANY ('{15434,5748,52137,68364,90577,90362,23511,5958,15628,56185,76443,49375,43728,89251,97293,38341,58409,61576,19493,90260}'::bigint[]))
+        Heap Fetches: 0
+        Index Searches: 20
+        Buffers: shared hit=35 read=26
+Planning:
+  Buffers: shared hit=12 read=6
+Planning Time: 0.398 ms
+Execution Time: 0.717 ms

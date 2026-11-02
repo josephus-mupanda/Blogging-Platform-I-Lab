@@ -1,6 +1,6 @@
 # Database Design Document — Smart Blogging Platform
 
-**Version:** 1.0 · **Date:** 2026-11-01 · **Phase:** 1
+**Version:** 1.1 · **Date:** 2026-11-02 · **Phase:** 1, revised after Phase 4 measurements
 
 ---
 
@@ -10,8 +10,8 @@ The platform uses **two stores**, each where it is strongest:
 
 | Store | Holds | Why |
 |-------|-------|-----|
-| **PostgreSQL 16** | `users`, `posts`, `tags`, `post_tags`, `comments`, `reviews` | Structured, highly relational data with hard integrity rules. Authorship, tagging and publication state are all constraint problems, and a relational engine enforces them for free. |
-| **MongoDB 7** | `comments`, `reviews` collections | The same two entities, modelled as documents. Comment threads are variable-depth and their metadata is open-ended (edit history, reactions, moderation flags), exactly the shape that forces either a sparse table or an EAV side table in SQL. |
+| **PostgreSQL 18** | `users`, `posts`, `tags`, `post_tags`, `comments`, `reviews` | Structured, highly relational data with hard integrity rules. Authorship, tagging and publication state are all constraint problems, and a relational engine enforces them for free. |
+| **MongoDB 9** | `comments`, `reviews` collections | The same two entities, modelled as documents. Comment threads are variable-depth and their metadata is open-ended (edit history, reactions, moderation flags), exactly the shape that forces either a sparse table or an EAV side table in SQL. |
 
 ### Why `comments` and `reviews` exist in *both* stores
 
@@ -228,19 +228,30 @@ database with and without them by simply choosing whether to run that file.
 
 | Index | Table / Expression | Serves |
 |---|---|---|
-| `idx_posts_author_id` | posts(author_id) | "posts by author" filter; FK join |
+| `idx_posts_author_id` | posts(author_id) | "posts by author" filter; the FK cascade on user deletion |
 | `idx_posts_status_published` | posts(status, published_at DESC) | the default feed query - composite, so one index covers filter **and** sort |
-| `idx_posts_title_lower` | posts(LOWER(title)) | case-insensitive exact/prefix title search (US 3.1) |
+| `idx_posts_title_lower` | posts(LOWER(title)) | case-insensitive exact title lookup (US 3.1) |
 | `idx_posts_title_trgm` | GIN posts(title gin_trgm_ops) | `ILIKE '%term%'` substring search, which a B-tree cannot serve |
-| `idx_posts_search_tsv` | GIN posts(to_tsvector(title, body)) | full-text keyword ranking across the body |
-| `idx_posts_created_at` | posts(created_at DESC) | newest-first listing and keyset pagination |
+| `idx_posts_search_tsv` | GIN posts(setweight(to_tsvector(title),'A') \|\| setweight(to_tsvector(body),'B')) | full-text keyword search across title and body, title weighted higher |
+| `idx_posts_created_at` | posts(created_at DESC) | newest-first listing |
+| `idx_posts_views_published` | posts(view_count DESC) WHERE status = 'PUBLISHED' | partial; "most viewed", which only ever lists published posts |
 | `idx_tags_name_lower` | tags(LOWER(name)) | tag lookup by name, case-insensitive |
-| `idx_post_tags_tag_id` | post_tags(tag_id) | reverse lookup "all posts with this tag" - the composite PK only covers post-first access |
-| `idx_comments_post_created` | comments(post_id, created_at) | load a post's comment thread in order |
-| `idx_comments_parent` | comments(parent_comment_id) WHERE NOT NULL | partial index; reply resolution, skipping the top-level majority |
+| `idx_tags_name_trgm` | GIN tags(name gin_trgm_ops) | tag autocomplete |
+| `idx_post_tags_tag_id` | post_tags(tag_id, post_id) | reverse lookup "all posts with this tag" - the composite PK only covers post-first access |
+| `idx_comments_post_created` | comments(post_id, created_at) | load a post's comment thread in order; per-post comment counts |
+| `idx_comments_parent` | comments(parent_comment_id) WHERE NOT NULL | partial; reply resolution, skipping the top-level majority |
 | `idx_comments_author` | comments(author_id) | "my comments" |
-| `idx_reviews_post_id` | reviews(post_id) | rating aggregate per post |
-| `idx_reviews_reviewer` | reviews(reviewer_id) | "my reviews" |
+| `idx_comments_moderation` | comments(created_at DESC) WHERE status <> 'VISIBLE' | partial; the moderation queue, about 2% of rows, read newest-first without a sort |
+| `idx_comments_body_trgm` | GIN comments(body gin_trgm_ops) | keyword search in comments, `ILIKE '%term%'` (added in Phase 4) |
+| `idx_reviews_post_rating` | reviews(post_id, rating) | rating count and average per post, answered index-only |
+| `idx_reviews_reviewer` | reviews(reviewer_id, created_at DESC) | "my reviews", newest first |
+
+**An expression index only serves the identical expression.** PostgreSQL matches an
+expression index structurally: a query must repeat the indexed expression exactly, not
+an equivalent one. Phase 4 found the post search written as
+`to_tsvector('english', title || ' ' || body)` while the index above was built on the
+weighted, `coalesce`d form. Both find the same posts; only one can use the index. The
+query now repeats the indexed expression - see `docs/02-performance-report.md` §3.
 
 **Rationale for the composite order.** `(status, published_at DESC)` is ordered
 equality-column-first: the feed always filters `status = 'PUBLISHED'` and then sorts by
@@ -349,14 +360,27 @@ Schema validation is enforced with `$jsonSchema` at `validationLevel: "strict"`,
 - `tags.tag_id` stays `SERIAL` - a tag vocabulary is bounded in the thousands.
 - All timestamps are `TIMESTAMPTZ`, never `TIMESTAMP`: readers sit in multiple timezones
   and a naive timestamp silently loses that.
-- Seed data is generated at roughly 500 posts and 5 000 comments so that Phase 4 index
-  benchmarks measure something real. A 20-row table is index-immune.
+- The demo seed holds roughly 500 posts and 5 000 comments: enough for the UI, still
+  index-immune. Phase 4 measured on a separate database built by `db/bench/scale.sql`
+  (100 000 posts, 630 000 comments, 260 000 reviews), where the index decisions in §5
+  show up as 11× to 1,300× differences; see `docs/02-performance-report.md`.
 
 ---
 
-## 9. Open Items for Later Phases
+## 9. Items Resolved in Phase 4
 
-- Keyset (cursor) pagination alongside `LIMIT/OFFSET` - Phase 4, deep-page performance.
-- Materialized view for per-post rating aggregates, if the live `AVG` proves slow -
-  Phase 4, and only if measured.
-- Full-text search weighting (title above body) once the tsvector index is benchmarked.
+- **Keyset pagination.** Measured against OFFSET: equal on page one, 398× faster at row
+  50 000. The post list keeps OFFSET, because it offers page numbers and totals that
+  keyset cannot, and the demo's deepest page costs about 1 ms. Keyset is the
+  recommendation for next-only feeds. Report §6.
+- **Materialized view for rating aggregates: not needed.** The live aggregate for a
+  page of 20 posts takes 0.70 ms as an index-only scan on `idx_reviews_post_rating`.
+  A materialized view would add a refresh problem to save less than a millisecond.
+  Report §4.1.
+- **Full-text weighting.** The weighted index existed, but the query never used it
+  (report §3, defect 1). Fixed, so title and body hits are now both served by
+  the index.
+- **Engagement figures and the comment store.** Not an open item before Phase 3. The
+  post list's comment and review counts now come from whichever store
+  `app.comments.store` selects, through batched lookups, instead of from PostgreSQL
+  subqueries. `docs/03-sql-vs-nosql.md` compares the two stores.

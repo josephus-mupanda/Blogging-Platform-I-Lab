@@ -36,7 +36,7 @@ status is updated the moment the step changes state** — not at the end of a ph
 | 1 | Foundation & Database Design | Epic 1, Epic 4.2 (schema), Epic 5 (setup docs) | 25 + part of 10 | `DONE` |
 | 2 | Persistence Layer (JDBC + Mongo) | Epic 2.1, 2.2 (data), Epic 4.2 (impl) | 20 + half of 20 | `DONE` |
 | 3 | JavaFX Application | Epic 2.1, 2.2 (UI) | half of 20 | `DONE` |
-| 4 | DSA, Optimization, Performance & Docs | Epic 3, Epic 4.1, Epic 5 | 15 + 10 + part of 10 | `WIP` |
+| 4 | DSA, Optimization, Performance & Docs | Epic 3, Epic 4.1, Epic 5 | 15 + 10 + part of 10 | `DONE` |
 
 ---
 
@@ -133,7 +133,7 @@ management console.
 
 ---
 
-## Phase 4 — DSA, Optimization, Performance & Docs `PENDING`
+## Phase 4 — DSA, Optimization, Performance & Docs `DONE`
 
 **Goal:** Measured improvement, not claimed improvement.
 
@@ -143,19 +143,21 @@ management console.
 | 4.2 | Cache invalidation on every write, proven by test (no stale read) | `DONE` | `CachedPostDaoTest` — 15 tests; a recording DAO counts calls, so a hit is a call that did not happen and a stale read is caught directly |
 | 4.3 | Inverted index `Map<String, Set<Long>>` for O(1) keyword candidates | `DONE` | `algo/InvertedIndex.java`; 11 tests, incl. agreement with a linear scan over 400 documents |
 | 4.4 | Own merge sort + binary search | `DONE` | `algo/Sorting.java`; 15 tests, incl. stability and agreement with `Collections.sort`/`binarySearch` on random data |
-| 4.5 | `EXPLAIN ANALYZE` captured before/after `V2__indexes.sql` | `PENDING` | Unblocked by 3.0 |
-| 4.6 | B-tree vs GIN/trigram comparison for text search | `PENDING` | Unblocked by 3.0 |
-| 4.7 | Keyset vs OFFSET pagination at depth | `PENDING` | Unblocked by 3.0 |
+| 4.5 | `EXPLAIN ANALYZE` captured before/after `V2__indexes.sql` | `DONE` | `docs/benchmarks/plans/` — 12 queries × 2 phases, summarised in `plans.csv`; the suite toggles the indexes by parsing `V2__indexes.sql` itself |
+| 4.6 | B-tree vs GIN/trigram comparison for text search | `DONE` | `indexes.csv`, `fulltext.csv`: B-tree `LOWER(title)` 241×, trigram `ILIKE` 27×, full-text GIN 11,236× once the query matched the index (report §4–5) |
+| 4.7 | Keyset vs OFFSET pagination at depth | `DONE` | `pagination.csv`: equal on page one, 398× at row 50 000; both return identical pages (checked each run) |
 | 4.8 | Benchmark harness: warm-up, N iterations, median, CSV output | `DONE` | `benchmark/Benchmark.java`, `BenchmarkResult.java`; 10 tests, incl. proof the median ignores an injected outlier |
-| 4.9 | SQL vs NoSQL: same workloads through both `CommentDao` impls | `PENDING` | Harness ready, data loaded |
-| 4.10 | `docs/02-performance-report.md` with real numbers | `BLOCKED` | Waits on measurements from 4.5–4.9; writing it first would mean inventing the numbers |
-| 4.11 | `docs/03-sql-vs-nosql.md` with the trade-off analysis | `BLOCKED` | Same reason as 4.10 |
-| 4.12 | Final README, design doc revision, testing evidence assembled | `PENDING` | — |
+| 4.9 | SQL vs NoSQL: same workloads through both `CommentDao` impls | `DONE` | `sql-vs-nosql.csv`, `storage.csv`: 10 workloads on identical data (MongoDB loaded from PostgreSQL by `MongoBenchLoader`) |
+| 4.10 | `docs/02-performance-report.md` with real numbers | `DONE` | Written from the CSVs after the run; tables generated from them, not retyped |
+| 4.11 | `docs/03-sql-vs-nosql.md` with the trade-off analysis | `DONE` | Schema justification (US 4.2), measured comparison, integrity trade-offs, conclusion |
+| 4.12 | Final README, design doc revision, testing evidence assembled | `DONE` | README rewritten; design doc v1.1 (§5 index table realigned with V2, §9 open items resolved) |
+| 4.13 | Benchmark dataset separate from the demo data | `DONE` | `db/bench/scale.sql`: 100 000 posts, 630 000 comments, 260 000 reviews; the suite refuses any database not named `*bench*` |
+| 4.14 | Fix what the measurements exposed | `DONE` | Five defects, each confirmed with `EXPLAIN` before changing it; report §3 |
 
 **Exit criteria**
 
-- Every performance claim is backed by a recorded number in a CSV.
-- Cache invalidation correctness is proven by a test, not asserted in prose.
+- Every performance claim is backed by a recorded number in a CSV. **Met** — `docs/benchmarks/`.
+- Cache invalidation correctness is proven by a test, not asserted in prose. **Met** — `CachedPostDaoTest`.
 
 **Maps to:** DSA Application (15 pts), Performance Optimization (10 pts), remainder of
 Documentation (10 pts).
@@ -169,11 +171,11 @@ Documentation (10 pts).
 | Database Design Document | `DONE` | `docs/01-database-design.md` |
 | SQL Implementation Script | `DONE` | `db/postgres/V1-V3` |
 | NoSQL Implementation Script | `DONE` | `db/mongo/01-03` |
-| JavaFX Application | `WIP` | `ui/` + `view/`; builds and launches, CRUD unverified |
-| Performance Report | `PENDING` | `docs/02-performance-report.md` |
-| SQL vs NoSQL Comparison | `PENDING` | `docs/03-sql-vs-nosql.md` |
+| JavaFX Application | `DONE` | `ui/` + `view/`; every CRUD path verified end to end by `UiCrudE2E` |
+| Performance Report | `DONE` | `docs/02-performance-report.md`, data in `docs/benchmarks/` |
+| SQL vs NoSQL Comparison | `DONE` | `docs/03-sql-vs-nosql.md` |
 | README | `DONE` | `README.md` |
-| Testing Evidence | `WIP` | **166 passing tests, incl. 29 live-database ITs**; real-data screenshots pending (3.13) |
+| Testing Evidence | `DONE` | `mvn test`: **173 run, 0 failures, 0 skipped** against live servers; `UiCrudE2E` 13/13; 8 real-data screenshots; benchmark CSVs and plans |
 
 ---
 
@@ -266,3 +268,28 @@ Documentation (10 pts).
   (4) Review ratings rendered as `****-`; now star glyphs.
   (5) Status badges and comment counts truncated in the post table on a 1280px screen;
   fixed-content columns now have minimum widths.
+- **2026-11-02** — Phase 4 done. Built a separate benchmark database (`db/bench/scale.sql`,
+  100 000 posts / 630 000 comments / 260 000 reviews) and copied its comments and reviews
+  into MongoDB row for row (`MongoBenchLoader`), so the store comparison runs on identical
+  data. `PerformanceSuite` (`mvn javafx:run@bench`) measures indexes off and on, full-text
+  search, OFFSET vs keyset, the LRU cache, the in-memory structures, and both comment
+  stores, writing CSVs and `EXPLAIN ANALYZE` plans to `docs/benchmarks/`. The first run
+  exposed five slow-but-correct defects, each confirmed with `EXPLAIN` before changing it:
+  (1) the post search used `to_tsvector(title || ' ' || body)` while the GIN index was
+  built on the weighted `coalesce` form, so the index was never used: 15.35 s per search
+  *with* the index, 1.14 ms after matching the expression;
+  (2, 3) MongoDB subtree read and delete-with-replies filtered on `path` without
+  `postId` (index `{postId, path}`) and quoted the prefix with `\Q..\E`: 630 000
+  documents scanned, 2.12 s → 6.27 ms and 858 ms → 6.02 ms;
+  (4) MongoDB moderation queue used `$ne`, which cannot use the partial index:
+  438 ms → 3.19 ms with `$in`;
+  (5) PostgreSQL moderation index led with `status`, forcing a sort of the whole queue:
+  re-keyed on `created_at`, 25.4 ms → 0.32 ms.
+  Also added a trigram index on `comments.body` (search 1.63 s → 25.7 ms). The first run is
+  kept in `docs/benchmarks/run-1-before-fixes/`. Unindexed timings varied up to 4× between
+  runs on this 4-core machine, which the report states; the indexed timings agreed
+  closely. Wrote `docs/02-performance-report.md` and `docs/03-sql-vs-nosql.md` from the
+  CSVs, and checked their claims against the evidence — one claim was wrong and was
+  corrected: MongoDB's review aggregate is index-covered (0 documents examined), so its
+  gap to PostgreSQL is per-query overhead, not I/O. Design doc v1.1; README rewritten.
+  `mvn test`: 173 run, 0 failures, 0 skipped; `UiCrudE2E` 13/13.

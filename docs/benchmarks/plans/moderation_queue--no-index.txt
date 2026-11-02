@@ -1,0 +1,23 @@
+-- moderation_queue (no index)
+-- SELECT comment_id, post_id, created_at FROM comments WHERE status <> 'VISIBLE' ORDER BY created_at DESC LIMIT 50
+-- parameters: 
+Limit  (cost=15653.56..15659.38 rows=50 width=24) (actual time=416.011..457.746 rows=50.00 loops=1)
+  Buffers: shared hit=9708 read=1531
+  ->  Gather Merge  (cost=15653.56..17414.53 rows=15120 width=24) (actual time=416.010..457.738 rows=50.00 loops=1)
+        Workers Planned: 2
+        Workers Launched: 2
+        Buffers: shared hit=9708 read=1531
+        ->  Sort  (cost=14653.53..14669.28 rows=6300 width=24) (actual time=164.905..164.909 rows=31.33 loops=3)
+              Sort Key: created_at DESC
+              Sort Method: top-N heapsort  Memory: 31kB
+              Buffers: shared hit=9708 read=1531
+              Worker 0:  Sort Method: quicksort  Memory: 25kB
+              Worker 1:  Sort Method: top-N heapsort  Memory: 31kB
+              ->  Parallel Seq Scan on comments  (cost=0.00..14444.25 rows=6300 width=24) (actual time=0.261..159.162 rows=5017.00 loops=3)
+                    Filter: ((status)::text <> 'VISIBLE'::text)
+                    Rows Removed by Filter: 204983
+                    Buffers: shared hit=9632 read=1531
+Planning:
+  Buffers: shared hit=3
+Planning Time: 0.420 ms
+Execution Time: 457.786 ms

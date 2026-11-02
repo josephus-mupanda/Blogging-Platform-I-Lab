@@ -1,0 +1,5 @@
+operation,variant,iterations,median_ms,mean_ms,min_ms,max_ms,p95_ms
+findById_x2000_skewed,uncached,9,388.2781,414.1056,366.4849,548.7377,548.7377
+findById_x2000_skewed,LRU cache 200,9,74.5841,74.3090,70.0258,76.9711,76.9711
+findById_single_hot,uncached,201,0.1718,0.1870,0.1378,0.5820,0.2888
+findById_single_hot,LRU cache 200,201,0.0004,0.0005,0.0003,0.0155,0.0005

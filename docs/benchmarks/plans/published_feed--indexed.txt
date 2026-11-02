@@ -1,0 +1,13 @@
+-- published_feed (indexed)
+-- SELECT post_id, title, published_at FROM posts WHERE status = 'PUBLISHED' ORDER BY published_at DESC LIMIT 20
+-- parameters: 
+Limit  (cost=0.42..11.81 rows=20 width=51) (actual time=0.600..1.070 rows=20.00 loops=1)
+  Buffers: shared hit=1 read=22
+  ->  Index Scan using idx_posts_status_published on posts  (cost=0.42..45530.47 rows=79950 width=51) (actual time=0.598..1.064 rows=20.00 loops=1)
+        Index Cond: ((status)::text = 'PUBLISHED'::text)
+        Index Searches: 1
+        Buffers: shared hit=1 read=22
+Planning:
+  Buffers: shared hit=9
+Planning Time: 0.371 ms
+Execution Time: 1.094 ms

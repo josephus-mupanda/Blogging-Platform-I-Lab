@@ -1,0 +1,19 @@
+-- fts_old_dao_expression (no index)
+-- SELECT COUNT(*) FROM posts p WHERE to_tsvector('english', p.title || ' ' || p.body) @@ plainto_tsquery('english', ?)
+-- parameters: term1583
+Finalize Aggregate  (cost=25444.57..25444.58 rows=1 width=8) (actual time=14932.920..14932.984 rows=1.00 loops=1)
+  Buffers: shared hit=454 read=13060
+  ->  Gather  (cost=25444.35..25444.56 rows=2 width=8) (actual time=14932.909..14932.979 rows=3.00 loops=1)
+        Workers Planned: 2
+        Workers Launched: 2
+        Buffers: shared hit=454 read=13060
+        ->  Partial Aggregate  (cost=24444.35..24444.36 rows=1 width=8) (actual time=14756.583..14756.584 rows=1.00 loops=3)
+              Buffers: shared hit=454 read=13060
+              ->  Parallel Seq Scan on posts p  (cost=0.00..24443.83 rows=208 width=0) (actual time=297.194..14756.500 rows=33.00 loops=3)
+                    Filter: (to_tsvector('english'::regconfig, (((title)::text || ' '::text) || body)) @@ '''term1583'''::tsquery)
+                    Rows Removed by Filter: 33300
+                    Buffers: shared hit=454 read=13060
+Planning:
+  Buffers: shared hit=3 read=13
+Planning Time: 3.475 ms
+Execution Time: 14933.137 ms

@@ -1,0 +1,22 @@
+-- review_stats_for_page (no index)
+-- SELECT post_id, COUNT(*), ROUND(AVG(rating)::numeric, 2) FROM reviews WHERE post_id = ANY(?) GROUP BY post_id
+-- parameters: [15434, 5748, 52137, 68364, 90577, 90362, 23511, 5958, 15628, 56185, 76443, 49375, 43728, 89251, 97293, 38341, 58409, 61576, 19493, 90260]
+GroupAggregate  (cost=345.08..346.86 rows=71 width=48) (actual time=11.684..11.988 rows=18.00 loops=1)
+  Group Key: post_id
+  Buffers: shared hit=34 read=65
+  ->  Sort  (cost=345.08..345.26 rows=71 width=10) (actual time=11.091..11.096 rows=40.00 loops=1)
+        Sort Key: post_id
+        Sort Method: quicksort  Memory: 26kB
+        Buffers: shared hit=34 read=65
+        ->  Bitmap Heap Scan on reviews  (cost=89.07..342.90 rows=71 width=10) (actual time=6.650..11.037 rows=40.00 loops=1)
+              Recheck Cond: (post_id = ANY ('{15434,5748,52137,68364,90577,90362,23511,5958,15628,56185,76443,49375,43728,89251,97293,38341,58409,61576,19493,90260}'::bigint[]))
+              Heap Blocks: exact=39
+              Buffers: shared hit=34 read=65
+              ->  Bitmap Index Scan on uq_reviews_post_reviewer  (cost=0.00..89.00 rows=71 width=0) (actual time=6.154..6.154 rows=40.00 loops=1)
+                    Index Cond: (post_id = ANY ('{15434,5748,52137,68364,90577,90362,23511,5958,15628,56185,76443,49375,43728,89251,97293,38341,58409,61576,19493,90260}'::bigint[]))
+                    Index Searches: 20
+                    Buffers: shared hit=34 read=26
+Planning:
+  Buffers: shared hit=17 read=6
+Planning Time: 0.912 ms
+Execution Time: 12.395 ms

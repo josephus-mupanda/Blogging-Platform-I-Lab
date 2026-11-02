@@ -6,8 +6,18 @@ variable-shape data (threaded comments and reviews). The project demonstrates da
 design through to 3NF, JDBC data access with parameterized queries, and the DSA
 techniques — hashing, caching, sorting, searching and indexing — that make it fast.
 
-> **Project status:** Phase 1 of 4 complete. See [`phases.md`](phases.md) for the full
-> plan and current progress.
+> **Project status:** all four phases complete. See [`phases.md`](phases.md) for each
+> step and the evidence behind it.
+
+![Post detail with a threaded MongoDB discussion and the rating distribution](docs/screenshots/05-post-detail.png)
+
+| Document | What it holds |
+|---|---|
+| [`docs/01-database-design.md`](docs/01-database-design.md) | ERD, logical model, 3NF analysis, index rationale, MongoDB design |
+| [`docs/02-performance-report.md`](docs/02-performance-report.md) | Before/after timings for indexing, full-text search, pagination, caching and DSA, with query plans |
+| [`docs/03-sql-vs-nosql.md`](docs/03-sql-vs-nosql.md) | The same comment and review workloads on both stores, on identical data |
+| [`docs/benchmarks/`](docs/benchmarks/) | The CSVs and `EXPLAIN ANALYZE` plans every number in those reports comes from |
+| [`docs/screenshots/`](docs/screenshots/) | Every screen with seeded data, captured by the end-to-end UI test |
 
 ---
 
@@ -110,16 +120,29 @@ mvn javafx:run        # launch the application
 │   │   ├── V1__schema.sql        tables, constraints, FKs, triggers, summary view
 │   │   ├── V2__indexes.sql       index strategy, separable for benchmarking
 │   │   └── V3__seed.sql          demo data + generated bulk data
-│   └── mongo/
-│       ├── 01-collections.js     collections with $jsonSchema validators
-│       ├── 02-indexes.js         index strategy
-│       └── 03-seed.js            demo thread + bulk documents
+│   ├── mongo/
+│   │   ├── 01-collections.js     collections with $jsonSchema validators
+│   │   ├── 02-indexes.js         index strategy
+│   │   └── 03-seed.js            demo thread + bulk documents
+│   └── bench/
+│       └── scale.sql             100 000-post benchmark dataset (separate database)
 ├── docs/
-│   └── 01-database-design.md     ERD, logical model, 3NF analysis, index rationale
+│   ├── 01-database-design.md
+│   ├── 02-performance-report.md
+│   ├── 03-sql-vs-nosql.md
+│   ├── benchmarks/               CSV results and query plans
+│   └── screenshots/
 ├── src/main/java/org/example/bloggingplatformi/
-│   └── config/AppConfig.java     layered configuration resolution
-├── src/main/resources/
-│   └── application.properties
+│   ├── model/                    records: Post, Comment, Review, PostFilter, Page...
+│   ├── dao/                      interfaces + JDBC and MongoDB implementations,
+│   │                             CachedPostDao (LRU decorator), DaoFactory
+│   ├── service/                  validation and business rules
+│   ├── view/, ui/                JavaFX screens, shell, Async, design system
+│   ├── cache/, algo/             LruCache, InvertedIndex, merge sort, binary search
+│   ├── benchmark/                harness, PerformanceSuite, MongoBenchLoader
+│   ├── db/, config/              connection pool, Mongo client, layered config
+│   └── util/                     slugs, excerpts
+├── src/test/java/...             unit, integration and end-to-end UI tests
 ├── phases.md                     the four-phase delivery plan and its status
 └── README.md
 ```
@@ -138,11 +161,49 @@ The suite splits in two:
   slug generation and collision handling, excerpt truncation, the
   status/`published_at` pairing, tag normalization, pagination arithmetic and
   validation collection. These run against in-memory fake DAOs.
-- **Integration tests** (`PostgresDaoIT`, `MongoCommentDaoIT`) need a running
-  server. When one is unreachable they **skip** rather than fail, so a stopped
-  service does not produce a red build that everyone learns to ignore, and a run
-  without a database never reports success it did not earn. Start the databases
-  and re-run to see them execute.
+- **Integration tests** (`PostgresDaoIT`, `MongoCommentDaoIT`, `EngagementBatchIT`)
+  need a running server. When one is unreachable they **skip** rather than fail, so a
+  stopped service does not produce a red build that everyone learns to ignore, and a
+  run without a database never reports success it did not earn. Against live servers:
+  **173 tests, 0 failures, 0 skipped.**
+
+### End-to-end UI test
+
+```bash
+mvn test -Dtest=UiCrudE2E -Dsurefire.failIfNoSpecifiedTests=false
+```
+
+`UiCrudE2E` opens the real application window and performs every CRUD operation the way
+a user would: typing into fields, pressing buttons, answering confirmation dialogs. It
+then checks each result in PostgreSQL and MongoDB. It covers:
+- create, edit and delete a post;
+- comment, reply and review;
+- hide and restore a comment;
+- create and delete a tag;
+- deactivate and reactivate an account;
+- inline validation, refusal of a duplicate review, and the cascade when a post is
+  deleted.
+
+It also regenerates `docs/screenshots/`. It needs a display, so it is not part of
+`mvn test`.
+
+### Benchmarks
+
+The performance numbers come from a separate 100 000-post database, so the demo data is
+never touched. The steps are in
+[`docs/02-performance-report.md`](docs/02-performance-report.md) §9. In short:
+`db/bench/scale.sql`, then `mvn javafx:run@bench -Dbench.mode=load-mongo`, then
+`mvn javafx:run@bench`.
+
+Headline results, all from [`docs/benchmarks/`](docs/benchmarks/):
+
+| | Before | After |
+|---|---:|---:|
+| Default feed, 100 000 posts (composite index) | 394.0 ms | 0.30 ms |
+| Post keyword search (full-text index, after fixing the query to match it) | 29.98 s | 7.86 ms |
+| Page at row 50 000 (keyset instead of OFFSET) | 301.2 ms | 0.76 ms |
+| 2 000 skewed post lookups (LRU cache, 79.3 % hit rate) | 388.3 ms | 74.6 ms |
+| Keyword search over 100 000 titles in memory (inverted index) | 272.5 ms | 0.47 ms |
 
 ---
 
@@ -186,4 +247,8 @@ with `-Ddb.postgres.password=...` or `DB_POSTGRES_PASSWORD`.
 running. Start the service, or launch it with an explicit `--dbpath`.
 
 **Mongo seed inserts fewer comments than expected** — `03-seed.js` must run after the
- PostgreSQL seed, since it references `post_id` values 1 through 508.
+PostgreSQL seed, since it references `post_id` values 1 through 508.
+
+**The benchmark suite refuses to start** — it only runs against databases whose names
+contain `bench`, because it drops and recreates indexes. Build the benchmark database
+first (report §9), or point `bench.postgres.url` in `pom.xml` at it.
