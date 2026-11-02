@@ -93,10 +93,20 @@ CREATE INDEX IF NOT EXISTS idx_comments_parent
 CREATE INDEX IF NOT EXISTS idx_comments_author
     ON comments (author_id);
 
--- Moderation queue: the non-visible minority.
+-- Moderation queue: WHERE status <> 'VISIBLE' ORDER BY created_at DESC.
+-- Partial, so only the ~2% non-visible minority is indexed. Keyed on
+-- created_at alone, not (status, created_at): with status first the queue
+-- spans two status ranges, so PostgreSQL had to read all ~15 000 queued rows
+-- and sort them to return 50 (25 ms in Phase 4). Keyed on the sort column it
+-- reads the newest 50 entries and stops.
 CREATE INDEX IF NOT EXISTS idx_comments_moderation
-    ON comments (status, created_at DESC)
+    ON comments (created_at DESC)
     WHERE status <> 'VISIBLE';
+
+-- Keyword search in comments: body ILIKE '%term%'. Added in Phase 4, which
+-- measured the unindexed search at 1.6 s over 630 000 comments.
+CREATE INDEX IF NOT EXISTS idx_comments_body_trgm
+    ON comments USING GIN (body gin_trgm_ops);
 
 -- ---------------------------------------------------------------------
 -- reviews
@@ -138,5 +148,6 @@ ANALYZE reviews;
 -- DROP INDEX IF EXISTS idx_comments_parent;
 -- DROP INDEX IF EXISTS idx_comments_author;
 -- DROP INDEX IF EXISTS idx_comments_moderation;
+-- DROP INDEX IF EXISTS idx_comments_body_trgm;
 -- DROP INDEX IF EXISTS idx_reviews_post_rating;
 -- DROP INDEX IF EXISTS idx_reviews_reviewer;

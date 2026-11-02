@@ -18,6 +18,11 @@
         <mongodb.version>5.2.1</mongodb.version>
         <hikari.version>5.1.0</hikari.version>
         <slf4j.version>2.0.16</slf4j.version>
+
+        <!-- Benchmark suite: mvn javafx:run@bench [-Dbench.mode=load-mongo] -->
+        <bench.mode>run</bench.mode>
+        <bench.postgres.url>jdbc:postgresql://localhost:5433/blogging_platform_bench</bench.postgres.url>
+        <bench.mongo.database>blogging_platform_bench</bench.mongo.database>
     </properties>
 
     <dependencies>
@@ -129,6 +134,21 @@
                             <noManPages>true</noManPages>
                             <stripDebug>true</stripDebug>
                             <noHeaderFiles>true</noHeaderFiles>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <!-- Phase 4 benchmark suite, against the separate
+                             benchmark database so the demo data is never
+                             touched. Writes docs/benchmarks/. -->
+                        <id>bench</id>
+                        <configuration>
+                            <mainClass>org.example.bloggingplatformi/org.example.bloggingplatformi.benchmark.PerformanceSuite</mainClass>
+                            <options>
+                                <option>-Xmx3g</option>
+                                <option>-Dbench.mode=${bench.mode}</option>
+                                <option>-Ddb.postgres.url=${bench.postgres.url}</option>
+                                <option>-Ddb.mongo.database=${bench.mongo.database}</option>
+                            </options>
                         </configuration>
                     </execution>
                 </executions>

@@ -169,10 +169,10 @@ public class JdbcCommentDao implements CommentDao {
         if (keyword == null || keyword.isBlank()) {
             return List.of();
         }
-        // ILIKE with a leading wildcard, which only a trigram index can serve.
-        // The relational side has no text index on comments.body, so this is a
-        // sequential scan by design: Phase 4 contrasts it with the Mongo text
-        // index rather than pretending the two are equivalent.
+        // ILIKE with a leading wildcard, which only a trigram index can serve:
+        // idx_comments_body_trgm. Unlike MongoDB's text index it matches
+        // substrings, not just whole stemmed words, at the price of a larger
+        // index. Without it this was a 630 000-row scan (1.6 s in Phase 4).
         return Database.withConnection(connection -> {
             try (PreparedStatement ps = connection.prepareStatement(
                     SELECT_BASE + " WHERE c.body ILIKE ? ORDER BY c.created_at DESC LIMIT ?")) {

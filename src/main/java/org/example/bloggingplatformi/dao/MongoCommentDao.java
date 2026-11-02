@@ -129,12 +129,7 @@ public class MongoCommentDao implements CommentDao {
             if (root == null) {
                 return List.of();
             }
-            // Everything below the root shares the prefix "<root.path><root id>/".
-            // Pattern.quote is essential: a path is user-independent here, but
-            // building a regex from stored data without escaping is the same
-            // class of mistake as string-concatenating SQL.
-            String prefix = root.getString(F_PATH) + id.toHexString() + "/";
-            Bson descendants = Filters.regex(F_PATH, Pattern.compile("^" + Pattern.quote(prefix)));
+            Bson descendants = descendantsOf(root);
 
             List<Comment> result = new ArrayList<>();
             result.add(map(root));
@@ -170,7 +165,11 @@ public class MongoCommentDao implements CommentDao {
     @Override
     public List<Comment> findForModeration(int limit) {
         return run(() -> collect(comments()
-                .find(Filters.ne(F_STATUS, CommentStatus.VISIBLE.name()))
+                // $in over the non-visible statuses, not $ne VISIBLE: both mean
+                // the same, but only $in implies the partial index's filter, so
+                // only $in can use idx_comments_moderation. $ne scanned all
+                // 630 000 documents of the benchmark set (438 ms vs 3 ms).
+                .find(Filters.in(F_STATUS, NON_VISIBLE))
                 .sort(Sorts.descending(F_CREATED_AT))
                 .limit(Math.max(1, limit))));
     }
@@ -283,13 +282,10 @@ public class MongoCommentDao implements CommentDao {
             if (root == null) {
                 return 0L;
             }
-            String prefix = root.getString(F_PATH) + id.toHexString() + "/";
-
             // No ON DELETE CASCADE here, so the subtree is removed explicitly.
             // One prefix-matched deleteMany covers every depth at once, which
             // is the advantage the materialized path buys back.
-            DeleteResult descendants = comments().deleteMany(
-                    Filters.regex(F_PATH, Pattern.compile("^" + Pattern.quote(prefix))));
+            DeleteResult descendants = comments().deleteMany(descendantsOf(root));
             DeleteResult self = comments().deleteOne(Filters.eq("_id", id));
 
             return descendants.getDeletedCount() + self.getDeletedCount();
@@ -311,6 +307,46 @@ public class MongoCommentDao implements CommentDao {
                 Updates.combine(Updates.set(F_AUTHOR_NAME, newDisplayName),
                                 Updates.set(F_UPDATED_AT, new Date())))
                 .getModifiedCount());
+    }
+
+    /** Every status the moderation queue shows. Derived, so a new status is not missed. */
+    private static final List<String> NON_VISIBLE = java.util.Arrays.stream(CommentStatus.values())
+            .filter(status -> status != CommentStatus.VISIBLE)
+            .map(Enum::name)
+            .toList();
+
+    /**
+     * Everything below {@code root}: same post, path starting with
+     * {@code "<root.path><root id>/"}.
+     *
+     * <p>Both halves matter for speed, and Phase 4 measured each:
+     * <ul>
+     *   <li>{@code postId} must be in the filter. The index is
+     *       {@code {postId: 1, path: 1}}; a path condition alone cannot use it,
+     *       and the read became a 630 000-document collection scan (2.1 s).</li>
+     *   <li>The regex must be a plain anchored prefix. MongoDB turns
+     *       {@code ^/abc/} into tight index bounds; {@code ^\Q/abc/\E}
+     *       ({@code Pattern.quote}) defeats that analysis.</li>
+     * </ul>
+     * The prefix is still escaped, character by character, so stored data can
+     * never act as regex syntax.
+     */
+    private static Bson descendantsOf(Document root) {
+        String prefix = root.getString(F_PATH) + root.getObjectId("_id").toHexString() + "/";
+        return Filters.and(
+                Filters.eq(F_POST_ID, root.get(F_POST_ID)),
+                Filters.regex(F_PATH, Pattern.compile("^" + escapeRegex(prefix))));
+    }
+
+    static String escapeRegex(String literal) {
+        StringBuilder escaped = new StringBuilder(literal.length() + 8);
+        for (char c : literal.toCharArray()) {
+            if ("\\^$.|?*+()[]{}".indexOf(c) >= 0) {
+                escaped.append('\\');
+            }
+            escaped.append(c);
+        }
+        return escaped.toString();
     }
 
     // -----------------------------------------------------------------

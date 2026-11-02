@@ -88,9 +88,17 @@ public class JdbcPostDao implements PostDao {
             // match across title and body. The ILIKE arm catches partial words
             // ("post" inside "posting") that the tsvector tokeniser will not,
             // and the tsquery arm catches body hits the title index cannot.
+            //
+            // The tsvector expression must be character for character the one
+            // idx_posts_search_tsv is built on: PostgreSQL matches expression
+            // indexes structurally, not semantically. It used to read
+            // to_tsvector('english', p.title || ' ' || p.body), which finds the
+            // same rows but can never use the index, so every search computed a
+            // tsvector for every post. See docs/02-performance-report.md.
             where.append("""
                      AND (p.title ILIKE ?
-                          OR to_tsvector('english', p.title || ' ' || p.body)
+                          OR (setweight(to_tsvector('english', coalesce(p.title, '')), 'A') ||
+                              setweight(to_tsvector('english', coalesce(p.body, '')), 'B'))
                              @@ plainto_tsquery('english', ?))
                     """);
             params.add("%" + filter.keyword() + "%");
