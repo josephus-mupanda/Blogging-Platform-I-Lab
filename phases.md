@@ -35,7 +35,7 @@ status is updated the moment the step changes state** — not at the end of a ph
 |:---:|---|---|:---:|:---:|
 | 1 | Foundation & Database Design | Epic 1, Epic 4.2 (schema), Epic 5 (setup docs) | 25 + part of 10 | `DONE` |
 | 2 | Persistence Layer (JDBC + Mongo) | Epic 2.1, 2.2 (data), Epic 4.2 (impl) | 20 + half of 20 | `DONE` |
-| 3 | JavaFX Application | Epic 2.1, 2.2 (UI) | half of 20 | `WIP` |
+| 3 | JavaFX Application | Epic 2.1, 2.2 (UI) | half of 20 | `DONE` |
 | 4 | DSA, Optimization, Performance & Docs | Epic 3, Epic 4.1, Epic 5 | 15 + 10 + part of 10 | `WIP` |
 
 ---
@@ -87,7 +87,7 @@ status is updated the moment the step changes state** — not at the end of a ph
 
 ---
 
-## Phase 3 — JavaFX Application `WIP`
+## Phase 3 — JavaFX Application `DONE`
 
 **Goal:** A professional, interactive desktop client that exercises the whole service
 layer — not a default-skinned JavaFX form, but something that reads as a real content
@@ -108,18 +108,21 @@ management console.
 | 3.10 | Remove the `HelloApplication` scaffold; wire the new entry point | `DONE` | Scaffold deleted; `pom.xml` mainClass + `module-info` updated; `mvn compile` passes |
 | 3.11 | Verify the app launches without an unhandled exception | `DONE` | Ran under `mvn javafx:run`; log clean, window captured |
 | 3.14 | Responsive layout: no overflow on a 1280x720 logical screen | `DONE` | Window 1882x1004 physical inside a 1920x1008 work area; 4 screens captured DPI-aware, no horizontal scrollbar |
-| 3.12 | Verify every CRUD path end to end against a live database | `PENDING` | Unblocked by 3.0. DAO-level CRUD passes live; not yet exercised through the UI. |
-| 3.13 | Screenshots of each screen with real data, for Testing Evidence | `PENDING` | 4 screens captured in `docs/screenshots/` with an empty database; real-data captures now possible |
+| 3.12 | Verify every CRUD path end to end against a live database | `DONE` | `ui/UiCrudE2E` — 13 steps drive the real window (typing, clicking, confirming dialogs) and check each result in PostgreSQL and MongoDB: create/edit/delete post, comment, reply, review, tag, hide/restore, deactivate/reactivate, inline validation, duplicate-review refusal, cascade on delete |
+| 3.13 | Screenshots of each screen with real data, for Testing Evidence | `DONE` | 8 captures in `docs/screenshots/`, written by `UiCrudE2E` at the display's real pixel density |
+| 3.15 | Fix defects visible only with real data | `DONE` | Five found by reading the captures; see the 2026-11-02 change log entry |
 
-> **Known gap:** the UI is built, launches cleanly and handles an unreachable database
-> correctly, but **no CRUD operation has yet been performed through the UI**. The DAOs
-> beneath it now pass against live servers (step 2.14); steps 3.12 and 3.13 are next. What the screenshot proves is that
+> **How CRUD is verified.** `UiCrudE2E` opens a real window, so it is excluded from
+> `mvn test` and run on demand:
+> `mvn test -Dtest=UiCrudE2E -Dsurefire.failIfNoSpecifiedTests=false`.
+> It never calls a service to *do* anything: services are used only afterwards, to read
+> the databases and confirm what the screen claimed. What the screenshot proves is that
 > the application starts, renders and degrades gracefully — not that saving a post works.
 
 **Exit criteria**
 
 - `mvn clean javafx:run` launches without an unhandled exception. **Met.**
-- Every CRUD path works from the UI, against a live database. *Not met — step 3.12.*
+- Every CRUD path works from the UI, against a live database. **Met** — step 3.12.
 - No database call runs on the JavaFX application thread. **Met** — every call goes
   through `Async`, which runs on a daemon pool and marshals results back.
 - The UI is visually coherent: one type scale, one colour palette, consistent spacing.
@@ -243,3 +246,23 @@ Documentation (10 pts).
   Final counts — PostgreSQL: users 207, posts 508, tags 12, post_tags 1 259,
   comments 5 008, reviews 1 982. MongoDB: comments 5 005, reviews 1 500.
   `mvn test`: **166 run, 0 failures, 0 skipped**; seed counts unchanged after the run.
+- **2026-11-02** — Phase 3 done. Built `UiCrudE2E`, which drives the real application
+  through every CRUD path and checks each result in the databases (13/13 passing), plus
+  `FxDriver` (scene-graph lookup, dialog answering, waiting on `Async.inFlight()` rather
+  than sleeps) and a dependency-free PNG writer for the captures. Reading the eight
+  real-data captures found five defects no test had caught:
+  (1) **Engagement figures from the wrong store.** The post list and dashboard computed
+  comment and review counts with subqueries on PostgreSQL, while comments and reviews were
+  served from MongoDB: "8 comments, 2.83 (6)" in the list, "141 comments, 3.25 from 40" on
+  opening the post. `PostService` now fills them from the active store with two batched
+  lookups per page (`countVisibleByPostIds`, `statsByPostIds`, one grouped query each in
+  both stores); if that store is down, posts still list with the figures shown as unknown.
+  New `EngagementBatchIT` proves batch and per-post figures agree in both stores.
+  (2) **Every bar rendered full width** (rating distribution, tag usage, dashboard): a
+  StackPane stretches a Region to its max width, and only pref/min were set. One shared
+  `Styles.proportionBar` now bounds the fill to a fraction of the real track width.
+  (3) Post detail header read "Post" instead of the title — the heading was set before the
+  post loaded; added `AppShell.refreshHeading`.
+  (4) Review ratings rendered as `****-`; now star glyphs.
+  (5) Status badges and comment counts truncated in the post table on a 1280px screen;
+  fixed-content columns now have minimum widths.

@@ -287,17 +287,7 @@ public class DashboardView implements View {
         nameLabel.setMinWidth(110);
         nameLabel.setMaxWidth(110);
 
-        Region fill = new Region();
-        fill.getStyleClass().add("rating-bar-fill");
-        double ratio = max == 0 ? 0 : (double) count / max;
-        fill.setPrefWidth(Math.max(4, ratio * 150));
-        fill.setMinWidth(Math.max(4, ratio * 150));
-
-        StackPane track = new StackPane(fill);
-        track.getStyleClass().add("rating-bar-track");
-        track.setAlignment(Pos.CENTER_LEFT);
-        track.setPrefWidth(150);
-        HBox.setHgrow(track, Priority.ALWAYS);
+        Node track = Styles.proportionBar(max == 0 ? 0 : (double) count / max, 150);
 
         Label countLabel = Styles.label(Styles.number(count), "text-small");
         countLabel.setMinWidth(34);
@@ -339,7 +329,7 @@ public class DashboardView implements View {
         HBox.setHgrow(text, Priority.ALWAYS);
 
         HBox row = Styles.row(11, Styles.avatar(post.authorDisplayName(), true), text,
-                Styles.badge(Styles.number(post.commentCount()) + " · "
+                Styles.badge((post.hasEngagement() ? Styles.number(post.commentCount()) : "—") + " · "
                         + post.ratingDisplay(), "neutral"));
         row.setPadding(new Insets(6, 0, 6, 0));
         row.setOnMouseClicked(event -> shell.push(new PostDetailView(shell, post.postId())));

@@ -5,6 +5,8 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -206,6 +208,35 @@ public class JdbcCommentDao implements CommentDao {
                 try (ResultSet rs = ps.executeQuery()) {
                     return rs.next() ? rs.getLong(1) : 0L;
                 }
+            } catch (SQLException e) {
+                throw SqlSupport.translate(e, "Comment");
+            }
+        });
+    }
+
+    @Override
+    public Map<Long, Long> countVisibleByPostIds(Collection<Long> postIds) {
+        if (postIds.isEmpty()) {
+            return Map.of();
+        }
+        // = ANY(array) binds the whole id list as one parameter, so the
+        // statement text is the same whatever the page size.
+        String sql = """
+                SELECT post_id, COUNT(*)
+                  FROM comments
+                 WHERE status = 'VISIBLE' AND post_id = ANY(?)
+                 GROUP BY post_id
+                """;
+        return Database.withConnection(connection -> {
+            try (PreparedStatement ps = connection.prepareStatement(sql)) {
+                ps.setArray(1, connection.createArrayOf("bigint", postIds.toArray()));
+                Map<Long, Long> counts = new HashMap<>();
+                try (ResultSet rs = ps.executeQuery()) {
+                    while (rs.next()) {
+                        counts.put(rs.getLong(1), rs.getLong(2));
+                    }
+                }
+                return counts;
             } catch (SQLException e) {
                 throw SqlSupport.translate(e, "Comment");
             }

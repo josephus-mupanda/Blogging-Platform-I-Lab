@@ -288,6 +288,12 @@ public class PostListView implements View {
                 new javafx.beans.property.SimpleObjectProperty<>(data.getValue()));
         titleColumn.setCellFactory(column -> new TitleCell());
         titleColumn.setPrefWidth(340);
+        // Under the constrained policy every column shrinks proportionally
+        // once the table is narrower than the preferred total, which cut the
+        // status badge to "Publis..." on a 1280px screen. The other columns
+        // hold fixed-size content and get minimums; the title column already
+        // ellipsises and carries an excerpt, so it absorbs the squeeze.
+        titleColumn.setMinWidth(200);
         titleColumn.setSortable(false);
 
         TableColumn<PostSummary, PostSummary> authorColumn = new TableColumn<>("AUTHOR");
@@ -295,6 +301,7 @@ public class PostListView implements View {
                 new javafx.beans.property.SimpleObjectProperty<>(data.getValue()));
         authorColumn.setCellFactory(column -> new AuthorCell());
         authorColumn.setPrefWidth(170);
+        authorColumn.setMinWidth(150);
         authorColumn.setSortable(false);
 
         TableColumn<PostSummary, PostStatus> statusColumn = new TableColumn<>("STATUS");
@@ -302,6 +309,7 @@ public class PostListView implements View {
                 new javafx.beans.property.SimpleObjectProperty<>(data.getValue().status()));
         statusColumn.setCellFactory(column -> new BadgeCell());
         statusColumn.setPrefWidth(110);
+        statusColumn.setMinWidth(110);
         statusColumn.setSortable(false);
 
         TableColumn<PostSummary, String> engagementColumn = new TableColumn<>("ENGAGEMENT");
@@ -309,9 +317,11 @@ public class PostListView implements View {
             PostSummary post = data.getValue();
             return new javafx.beans.property.SimpleStringProperty(
                     Styles.number(post.viewCount()) + " views  ·  "
-                  + Styles.number(post.commentCount()) + " comments");
+                  + (post.hasEngagement() ? Styles.number(post.commentCount()) : "—")
+                  + " comments");
         });
-        engagementColumn.setPrefWidth(180);
+        engagementColumn.setPrefWidth(200);
+        engagementColumn.setMinWidth(195);
         engagementColumn.setSortable(false);
 
         TableColumn<PostSummary, String> ratingColumn = new TableColumn<>("RATING");
@@ -323,6 +333,7 @@ public class PostListView implements View {
             return new javafx.beans.property.SimpleStringProperty(text);
         });
         ratingColumn.setPrefWidth(100);
+        ratingColumn.setMinWidth(85);
         ratingColumn.setSortable(false);
 
         TableColumn<PostSummary, PostSummary> actionsColumn = new TableColumn<>("");
@@ -330,6 +341,7 @@ public class PostListView implements View {
                 new javafx.beans.property.SimpleObjectProperty<>(data.getValue()));
         actionsColumn.setCellFactory(column -> new ActionsCell());
         actionsColumn.setPrefWidth(130);
+        actionsColumn.setMinWidth(125);
         actionsColumn.setSortable(false);
 
         table.getColumns().setAll(List.of(titleColumn, authorColumn, statusColumn,

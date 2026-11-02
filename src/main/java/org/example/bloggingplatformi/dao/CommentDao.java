@@ -1,6 +1,9 @@
 package org.example.bloggingplatformi.dao;
 
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import org.example.bloggingplatformi.model.Comment;
@@ -52,6 +55,21 @@ public interface CommentDao {
     List<Comment> findForModeration(int limit);
 
     long countByPostId(long postId, boolean includeHidden);
+
+    /**
+     * Visible-comment counts for a page of posts, in one round trip.
+     *
+     * <p>Posts with no comments may be absent from the map. The default loops
+     * over {@link #countByPostId}; the real stores override it with a single
+     * grouped query, so a twenty-row listing costs one query, not twenty.
+     */
+    default Map<Long, Long> countVisibleByPostIds(Collection<Long> postIds) {
+        Map<Long, Long> counts = new HashMap<>();
+        for (Long postId : postIds) {
+            counts.put(postId, countByPostId(postId, false));
+        }
+        return counts;
+    }
 
     long count();
 

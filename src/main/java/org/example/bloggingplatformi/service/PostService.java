@@ -3,12 +3,16 @@ package org.example.bloggingplatformi.service;
 import java.time.OffsetDateTime;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
+import org.example.bloggingplatformi.dao.CommentDao;
 import org.example.bloggingplatformi.dao.DaoFactory;
 import org.example.bloggingplatformi.dao.PostDao;
+import org.example.bloggingplatformi.dao.ReviewDao;
 import org.example.bloggingplatformi.dao.TagDao;
+import org.example.bloggingplatformi.exception.DataAccessException;
 import org.example.bloggingplatformi.exception.EntityNotFoundException;
 import org.example.bloggingplatformi.exception.ValidationException;
 import org.example.bloggingplatformi.model.Page;
@@ -16,6 +20,7 @@ import org.example.bloggingplatformi.model.Post;
 import org.example.bloggingplatformi.model.PostFilter;
 import org.example.bloggingplatformi.model.PostStatus;
 import org.example.bloggingplatformi.model.PostSummary;
+import org.example.bloggingplatformi.model.RatingStats;
 import org.example.bloggingplatformi.model.Tag;
 import org.example.bloggingplatformi.util.Excerpts;
 import org.example.bloggingplatformi.util.Slugs;
@@ -35,13 +40,23 @@ public class PostService {
     private final PostDao postDao;
     private final TagDao tagDao;
 
+    /** Null when engagement figures are not wanted, as in unit tests. */
+    private final CommentDao commentDao;
+    private final ReviewDao reviewDao;
+
     public PostService() {
-        this(DaoFactory.posts(), DaoFactory.tags());
+        this(DaoFactory.posts(), DaoFactory.tags(), DaoFactory.comments(), DaoFactory.reviews());
     }
 
     public PostService(PostDao postDao, TagDao tagDao) {
+        this(postDao, tagDao, null, null);
+    }
+
+    public PostService(PostDao postDao, TagDao tagDao, CommentDao commentDao, ReviewDao reviewDao) {
         this.postDao = postDao;
         this.tagDao = tagDao;
+        this.commentDao = commentDao;
+        this.reviewDao = reviewDao;
     }
 
     public Optional<Post> findById(long postId) {
@@ -58,11 +73,43 @@ public class PostService {
     }
 
     public Page<PostSummary> search(PostFilter filter) {
-        return postDao.search(filter == null ? PostFilter.all() : filter);
+        Page<PostSummary> page = postDao.search(filter == null ? PostFilter.all() : filter);
+        List<PostSummary> decorated = withEngagement(page.content());
+        return new Page<>(decorated, page.pageNumber(), page.pageSize(), page.totalElements());
     }
 
     public List<PostSummary> findByAuthor(long authorId, int limit, int offset) {
-        return postDao.findByAuthor(authorId, limit, offset);
+        return withEngagement(postDao.findByAuthor(authorId, limit, offset));
+    }
+
+    /**
+     * Fills in comment and review figures from whichever store holds them.
+     *
+     * <p>These used to come from subqueries in the post query, which always
+     * read PostgreSQL. With {@code app.comments.store=MONGO} the list then
+     * showed the relational table's counts while the detail screen showed
+     * MongoDB's - "8 comments" in the list, 141 on opening the post. Two
+     * batched lookups per page (not one per row) read the active store instead.
+     *
+     * <p>If that store is down the posts are still listed, with the figures
+     * marked unknown: the post list must not fail because MongoDB did.
+     */
+    private List<PostSummary> withEngagement(List<PostSummary> summaries) {
+        if (summaries.isEmpty() || commentDao == null || reviewDao == null) {
+            return summaries;
+        }
+        List<Long> ids = summaries.stream().map(PostSummary::postId).toList();
+        try {
+            Map<Long, Long> comments = commentDao.countVisibleByPostIds(ids);
+            Map<Long, RatingStats> ratings = reviewDao.statsByPostIds(ids);
+            return summaries.stream()
+                    .map(s -> s.withEngagement(
+                            comments.getOrDefault(s.postId(), 0L),
+                            ratings.getOrDefault(s.postId(), RatingStats.NONE)))
+                    .toList();
+        } catch (DataAccessException e) {
+            return summaries.stream().map(PostSummary::withEngagementUnavailable).toList();
+        }
     }
 
     public List<Tag> tagsOf(long postId) {

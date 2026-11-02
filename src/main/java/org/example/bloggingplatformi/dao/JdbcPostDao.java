@@ -41,18 +41,9 @@ public class JdbcPostDao implements PostDao {
             u.display_name AS author_display_name
             """;
 
-    // Comment and review aggregates are correlated subqueries rather than
-    // joins onto grouped derived tables. With idx_comments_post_created and
-    // idx_reviews_post_rating in place each one is an index-only scan over a
-    // narrow range, and the planner does not have to aggregate the whole of
-    // both tables just to decorate twenty rows.
-    private static final String SUMMARY_AGGREGATES = """
-            (SELECT COUNT(*) FROM comments c
-              WHERE c.post_id = p.post_id AND c.status = 'VISIBLE')      AS comment_count,
-            (SELECT COUNT(*) FROM reviews r WHERE r.post_id = p.post_id) AS review_count,
-            (SELECT ROUND(AVG(r.rating)::numeric, 2) FROM reviews r
-              WHERE r.post_id = p.post_id)                               AS avg_rating
-            """;
+    // No comment or review aggregates here. Those live in whichever store
+    // app.comments.store selects, so PostService fills them in from that
+    // store; computing them in this query would always read PostgreSQL.
 
     @Override
     public Optional<Post> findById(long postId) {
@@ -122,7 +113,7 @@ public class JdbcPostDao implements PostDao {
         String countSql = "SELECT COUNT(*) FROM posts p JOIN users u ON u.user_id = p.author_id"
                 + where;
 
-        String pageSql = "SELECT " + SUMMARY_COLUMNS + ", " + SUMMARY_AGGREGATES
+        String pageSql = "SELECT " + SUMMARY_COLUMNS
                 + " FROM posts p JOIN users u ON u.user_id = p.author_id"
                 + where
                 + " ORDER BY " + filter.sort().sqlFragment()
@@ -186,7 +177,7 @@ public class JdbcPostDao implements PostDao {
 
     @Override
     public List<PostSummary> findByAuthor(long authorId, int limit, int offset) {
-        String sql = "SELECT " + SUMMARY_COLUMNS + ", " + SUMMARY_AGGREGATES + """
+        String sql = "SELECT " + SUMMARY_COLUMNS + """
                  FROM posts p
                  JOIN users u ON u.user_id = p.author_id
                  WHERE p.author_id = ?
@@ -395,8 +386,6 @@ public class JdbcPostDao implements PostDao {
                 rs.getLong("author_id"),
                 rs.getString("author_username"),
                 rs.getString("author_display_name"),
-                rs.getLong("comment_count"),
-                rs.getLong("review_count"),
-                rs.getBigDecimal("avg_rating"));
+                0L, 0L, null);
     }
 }

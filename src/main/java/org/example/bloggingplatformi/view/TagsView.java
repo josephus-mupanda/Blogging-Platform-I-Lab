@@ -199,17 +199,7 @@ public class TagsView implements View {
         nameLabel.setMinWidth(110);
         nameLabel.setMaxWidth(110);
 
-        Region fill = new Region();
-        fill.getStyleClass().add("rating-bar-fill");
-        double ratio = max == 0 ? 0 : (double) count / max;
-        fill.setPrefWidth(Math.max(3, ratio * 140));
-        fill.setMinWidth(Math.max(3, ratio * 140));
-
-        StackPane track = new StackPane(fill);
-        track.getStyleClass().add("rating-bar-track");
-        track.setAlignment(Pos.CENTER_LEFT);
-        track.setPrefWidth(140);
-        HBox.setHgrow(track, Priority.ALWAYS);
+        Node track = Styles.proportionBar(max == 0 ? 0 : (double) count / max, 140);
 
         Label countLabel = Styles.label(Styles.number(count), "text-small");
         countLabel.setMinWidth(32);

@@ -3,6 +3,7 @@ package org.example.bloggingplatformi.ui;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -26,6 +27,15 @@ import javafx.scene.Node;
 public final class Async {
 
     private static final ExecutorService EXECUTOR = Executors.newFixedThreadPool(4, daemonFactory());
+
+    /**
+     * Tasks submitted whose result has not yet been handed back to the FX
+     * thread. Counted down only after the callback has run, so zero means the
+     * UI has finished reacting to every query it started, not merely that the
+     * queries returned. The end-to-end UI test waits on this instead of
+     * guessing with sleeps.
+     */
+    private static final AtomicInteger IN_FLIGHT = new AtomicInteger();
 
     private Async() {
     }
@@ -58,17 +68,38 @@ public final class Async {
             }
         };
 
-        task.setOnSucceeded(event -> onSuccess.accept(task.getValue()));
+        task.setOnSucceeded(event -> {
+            try {
+                onSuccess.accept(task.getValue());
+            } finally {
+                IN_FLIGHT.decrementAndGet();
+            }
+        });
         task.setOnFailed(event -> {
-            Throwable error = task.getException();
-            if (onFailure != null) {
-                onFailure.accept(error);
-            } else {
-                Dialogs.error("Something went wrong", error);
+            try {
+                Throwable error = task.getException();
+                if (onFailure != null) {
+                    onFailure.accept(error);
+                } else {
+                    Dialogs.error("Something went wrong", error);
+                }
+            } finally {
+                IN_FLIGHT.decrementAndGet();
             }
         });
 
-        EXECUTOR.execute(task);
+        IN_FLIGHT.incrementAndGet();
+        try {
+            EXECUTOR.execute(task);
+        } catch (RuntimeException e) {
+            IN_FLIGHT.decrementAndGet();
+            throw e;
+        }
+    }
+
+    /** Background tasks whose FX-thread callback has not finished yet. */
+    public static int inFlight() {
+        return IN_FLIGHT.get();
     }
 
     /**
@@ -92,12 +123,15 @@ public final class Async {
 
     /** Fire-and-forget background work, for things like the view counter. */
     public static void runQuietly(Runnable work) {
+        IN_FLIGHT.incrementAndGet();
         EXECUTOR.execute(() -> {
             try {
                 work.run();
             } catch (RuntimeException ignored) {
                 // Deliberately silent: a failed view-count increment must not
                 // interrupt someone reading a post.
+            } finally {
+                IN_FLIGHT.decrementAndGet();
             }
         });
     }

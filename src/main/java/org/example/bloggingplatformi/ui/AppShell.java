@@ -356,9 +356,19 @@ public final class AppShell {
         show(history.pop(), !history.isEmpty());
     }
 
-    private void show(View view, boolean showBack) {
-        currentView = view;
+    /**
+     * Re-reads the heading of {@code view} if it is still the one on screen.
+     *
+     * <p>For views whose title depends on data they load, such as a post's
+     * detail screen: the heading is first set before that data arrives.
+     */
+    public void refreshHeading(View view) {
+        if (view == currentView) {
+            applyHeading(view);
+        }
+    }
 
+    private void applyHeading(View view) {
         headingLabel.setText(view.title());
 
         String subtitle = view.subtitle();
@@ -366,6 +376,12 @@ public final class AppShell {
         subheadingLabel.setText(hasSubtitle ? subtitle : "");
         subheadingLabel.setVisible(hasSubtitle);
         subheadingLabel.setManaged(hasSubtitle);
+    }
+
+    private void show(View view, boolean showBack) {
+        currentView = view;
+
+        applyHeading(view);
 
         actionBar.getChildren().setAll(view.actions());
 

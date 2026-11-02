@@ -209,6 +209,7 @@ public class PostDetailView implements View {
                 entry -> {
                     post = entry.getKey();
                     renderArticle(entry.getValue());
+                    shell.refreshHeading(this);
                 },
                 error -> {
                     articleCard.getChildren().setAll(
@@ -443,7 +444,7 @@ public class PostDetailView implements View {
         }
         reviewList.getChildren().clear();
         for (Review review : reviews.stream().limit(6).toList()) {
-            Label stars = Styles.label(review.stars(), "text-mono");
+            Label stars = Styles.label(review.stars(), "review-stars");
             Label name = Styles.label(review.reviewerName(), "text-small");
 
             VBox box = new VBox(4, Styles.row(8, stars, name));
@@ -500,17 +501,7 @@ public class PostDetailView implements View {
         Label label = Styles.label(stars + "★", "text-caption");
         label.setMinWidth(24);
 
-        Region fill = new Region();
-        fill.getStyleClass().add("rating-bar-fill");
-        double ratio = total == 0 ? 0 : (double) count / total;
-        fill.setPrefWidth(Math.max(2, ratio * 170));
-        fill.setMinWidth(Math.max(2, ratio * 170));
-
-        StackPane track = new StackPane(fill);
-        track.getStyleClass().add("rating-bar-track");
-        track.setAlignment(Pos.CENTER_LEFT);
-        track.setPrefWidth(170);
-        HBox.setHgrow(track, Priority.ALWAYS);
+        Node track = Styles.proportionBar(total == 0 ? 0 : (double) count / total, 170);
 
         Label countLabel = Styles.label(String.valueOf(count), "text-caption");
         countLabel.setMinWidth(24);

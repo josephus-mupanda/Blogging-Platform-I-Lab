@@ -127,6 +127,41 @@ public final class Styles {
         return region;
     }
 
+    /**
+     * A horizontal bar filled to {@code ratio} of its track.
+     *
+     * <p>The fill's <em>maximum</em> width is bound to a fraction of the
+     * track's actual width. Setting only a preferred width does nothing here:
+     * a StackPane stretches a resizable child up to its maximum, which for a
+     * Region is unbounded, so every bar used to render full regardless of its
+     * value - a tag used once looked identical to one used 125 times.
+     *
+     * @param ratio     0..1; clamped, and NaN is treated as zero
+     * @param prefWidth the track's preferred width; it still grows with the row
+     */
+    public static StackPane proportionBar(double ratio, double prefWidth) {
+        double clamped = Double.isNaN(ratio) ? 0 : Math.max(0, Math.min(1, ratio));
+
+        Region fill = new Region();
+        fill.getStyleClass().add("rating-bar-fill");
+
+        StackPane track = new StackPane(fill);
+        track.getStyleClass().add("rating-bar-track");
+        track.setAlignment(Pos.CENTER_LEFT);
+        track.setPrefWidth(prefWidth);
+        track.setMinWidth(40);
+        HBox.setHgrow(track, Priority.ALWAYS);
+
+        // Zero draws nothing: a stub would read as "a little". Anything above
+        // zero gets at least a few pixels so it stays visible.
+        fill.setVisible(clamped > 0);
+        fill.setMinWidth(0);
+        fill.maxWidthProperty().bind(javafx.beans.binding.Bindings.createDoubleBinding(
+                () -> clamped == 0 ? 0 : Math.max(4, track.getWidth() * clamped),
+                track.widthProperty()));
+        return track;
+    }
+
     public static HBox row(double spacing, Node... children) {
         HBox box = new HBox(spacing, children);
         box.setAlignment(Pos.CENTER_LEFT);

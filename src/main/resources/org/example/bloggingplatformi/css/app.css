@@ -617,6 +617,11 @@
     -fx-background-radius: 4;
     -fx-min-height: 7; -fx-pref-height: 7; -fx-max-height: 7;
 }
+.review-stars {
+    -fx-text-fill: -color-warning;
+    -fx-font-size: 13px;
+}
+
 .rating-bar-fill {
     -fx-background-color: -color-primary;
     -fx-background-radius: 4;

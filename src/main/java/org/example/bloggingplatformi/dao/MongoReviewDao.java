@@ -2,7 +2,10 @@ package org.example.bloggingplatformi.dao;
 
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -26,6 +29,7 @@ import org.bson.types.ObjectId;
 import org.example.bloggingplatformi.db.MongoProvider;
 import org.example.bloggingplatformi.exception.DataAccessException;
 import org.example.bloggingplatformi.exception.DuplicateEntityException;
+import org.example.bloggingplatformi.model.RatingStats;
 import org.example.bloggingplatformi.model.Review;
 
 /**
@@ -134,6 +138,31 @@ public class MongoReviewDao implements ReviewDao {
     @Override
     public long countByPostId(long postId) {
         return run(() -> reviews().countDocuments(Filters.eq(F_POST_ID, postId)));
+    }
+
+    @Override
+    public Map<Long, RatingStats> statsByPostIds(Collection<Long> postIds) {
+        if (postIds.isEmpty()) {
+            return Map.of();
+        }
+        return run(() -> {
+            Map<Long, RatingStats> stats = new HashMap<>();
+            for (Document row : reviews().aggregate(List.of(
+                    Aggregates.match(Filters.in(F_POST_ID, postIds)),
+                    Aggregates.group("$" + F_POST_ID,
+                            Accumulators.sum("n", 1),
+                            Accumulators.avg("avg", "$" + F_RATING))))) {
+                long postId = ((Number) row.get("_id")).longValue();
+                long count = ((Number) row.get("n")).longValue();
+                Number avg = (Number) row.get("avg");
+                // Same rounding as ROUND(AVG(rating), 2) on the SQL side, so
+                // the two stores display identical figures for identical data.
+                BigDecimal average = avg == null ? null
+                        : BigDecimal.valueOf(avg.doubleValue()).setScale(2, RoundingMode.HALF_UP);
+                stats.put(postId, new RatingStats(count, average));
+            }
+            return stats;
+        });
     }
 
     @Override

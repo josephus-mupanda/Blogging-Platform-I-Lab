@@ -1,9 +1,14 @@
 package org.example.bloggingplatformi.dao;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import org.example.bloggingplatformi.model.RatingStats;
 import org.example.bloggingplatformi.model.Review;
 
 /**
@@ -30,6 +35,24 @@ public interface ReviewDao {
     Map<Integer, Long> ratingDistribution(long postId);
 
     long countByPostId(long postId);
+
+    /**
+     * Review count and average for a page of posts, in one round trip.
+     *
+     * <p>Posts with no reviews may be absent from the map. The default loops;
+     * the real stores override it with a single grouped query.
+     */
+    default Map<Long, RatingStats> statsByPostIds(Collection<Long> postIds) {
+        Map<Long, RatingStats> stats = new HashMap<>();
+        for (Long postId : postIds) {
+            long count = countByPostId(postId);
+            BigDecimal average = averageRating(postId)
+                    .map(avg -> BigDecimal.valueOf(avg).setScale(2, RoundingMode.HALF_UP))
+                    .orElse(null);
+            stats.put(postId, new RatingStats(count, average));
+        }
+        return stats;
+    }
 
     long count();
 

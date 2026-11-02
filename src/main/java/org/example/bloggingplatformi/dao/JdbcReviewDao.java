@@ -5,12 +5,15 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
 import org.example.bloggingplatformi.db.Database;
+import org.example.bloggingplatformi.model.RatingStats;
 import org.example.bloggingplatformi.model.Review;
 
 /** PostgreSQL implementation of {@link ReviewDao}. */
@@ -147,6 +150,34 @@ public class JdbcReviewDao implements ReviewDao {
                 try (ResultSet rs = ps.executeQuery()) {
                     return rs.next() ? rs.getLong(1) : 0L;
                 }
+            } catch (SQLException e) {
+                throw SqlSupport.translate(e, "Review");
+            }
+        });
+    }
+
+    @Override
+    public Map<Long, RatingStats> statsByPostIds(Collection<Long> postIds) {
+        if (postIds.isEmpty()) {
+            return Map.of();
+        }
+        // Answered from idx_reviews_post_rating alone (index-only scan).
+        String sql = """
+                SELECT post_id, COUNT(*), ROUND(AVG(rating)::numeric, 2)
+                  FROM reviews
+                 WHERE post_id = ANY(?)
+                 GROUP BY post_id
+                """;
+        return Database.withConnection(connection -> {
+            try (PreparedStatement ps = connection.prepareStatement(sql)) {
+                ps.setArray(1, connection.createArrayOf("bigint", postIds.toArray()));
+                Map<Long, RatingStats> stats = new HashMap<>();
+                try (ResultSet rs = ps.executeQuery()) {
+                    while (rs.next()) {
+                        stats.put(rs.getLong(1), new RatingStats(rs.getLong(2), rs.getBigDecimal(3)));
+                    }
+                }
+                return stats;
             } catch (SQLException e) {
                 throw SqlSupport.translate(e, "Review");
             }

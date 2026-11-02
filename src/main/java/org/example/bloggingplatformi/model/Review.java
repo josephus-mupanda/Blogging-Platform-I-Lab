@@ -73,7 +73,10 @@ public record Review(
 
     /** Convenience for the UI: a 1-5 rating as stars. */
     public String stars() {
-        return "*".repeat(rating) + "-".repeat(MAX_RATING - rating);
+        // U+2605/U+2606. The rating-distribution rows already render U+2605 in
+        // the UI font; the ASCII stand-in only existed because the monospace
+        // style once fell through to a symbol face.
+        return "★".repeat(rating) + "☆".repeat(MAX_RATING - rating);
     }
 
     /** Objects.requireNonNull on the name keeps the denormalized copy honest. */

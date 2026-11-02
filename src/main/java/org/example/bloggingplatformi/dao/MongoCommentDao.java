@@ -4,6 +4,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Date;
 import java.util.Deque;
 import java.util.HashMap;
@@ -16,6 +17,8 @@ import java.util.regex.Pattern;
 
 import com.mongodb.MongoException;
 import com.mongodb.client.FindIterable;
+import com.mongodb.client.model.Accumulators;
+import com.mongodb.client.model.Aggregates;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.model.Filters;
 import com.mongodb.client.model.Sorts;
@@ -179,6 +182,26 @@ public class MongoCommentDao implements CommentDao {
                 : Filters.and(Filters.eq(F_POST_ID, postId),
                               Filters.eq(F_STATUS, CommentStatus.VISIBLE.name()));
         return run(() -> comments().countDocuments(filter));
+    }
+
+    @Override
+    public Map<Long, Long> countVisibleByPostIds(Collection<Long> postIds) {
+        if (postIds.isEmpty()) {
+            return Map.of();
+        }
+        // One $match on idx_comments_post_created's prefix, then a $group:
+        // the document-store equivalent of GROUP BY post_id.
+        return run(() -> {
+            Map<Long, Long> counts = new HashMap<>();
+            for (Document row : comments().aggregate(List.of(
+                    Aggregates.match(Filters.and(
+                            Filters.in(F_POST_ID, postIds),
+                            Filters.eq(F_STATUS, CommentStatus.VISIBLE.name()))),
+                    Aggregates.group("$" + F_POST_ID, Accumulators.sum("n", 1))))) {
+                counts.put(toLong(row.get("_id"), 0L), toLong(row.get("n"), 0L));
+            }
+            return counts;
+        });
     }
 
     @Override
