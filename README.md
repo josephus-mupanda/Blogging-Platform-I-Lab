@@ -49,9 +49,9 @@ psql -U postgres -p 5433 -d blogging_platform -f db/postgres/V3__seed.sql
 | users | 207 |
 | posts | 508 |
 | tags | 12 |
-| post_tags | ~1 400 |
+| post_tags | ~1 260 |
 | comments | ~5 000 |
-| reviews | ~1 500 |
+| reviews | ~1 980 |
 
 > `V2__indexes.sql` is kept separate on purpose. Phase 4 benchmarks query plans with and
 > without indexes, so the schema has to be usable without them. The same file carries a

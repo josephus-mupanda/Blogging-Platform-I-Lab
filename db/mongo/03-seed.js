@@ -75,8 +75,8 @@ const reply1Id = new ObjectId();
 const demoComments = [
   {
     _id: root1Id,
-    postId: NumberLong(1),
-    authorId: NumberLong(6),
+    postId: NumberLong("1"),
+    authorId: NumberLong("6"),
     authorName: 'reader01',
     parentId: null,
     path: '/',
@@ -89,8 +89,8 @@ const demoComments = [
   },
   {
     _id: reply1Id,
-    postId: NumberLong(1),
-    authorId: NumberLong(2),
+    postId: NumberLong("1"),
+    authorId: NumberLong("2"),
     authorName: 'ada_l',
     parentId: root1Id,
     path: '/' + root1Id.toHexString() + '/',
@@ -105,8 +105,8 @@ const demoComments = [
     updatedAt: daysAgo(28)
   },
   {
-    postId: NumberLong(1),
-    authorId: NumberLong(7),
+    postId: NumberLong("1"),
+    authorId: NumberLong("7"),
     authorName: 'reader02',
     parentId: reply1Id,
     path: '/' + root1Id.toHexString() + '/' + reply1Id.toHexString() + '/',
@@ -118,8 +118,8 @@ const demoComments = [
     updatedAt: daysAgo(27)
   },
   {
-    postId: NumberLong(2),
-    authorId: NumberLong(6),
+    postId: NumberLong("2"),
+    authorId: NumberLong("6"),
     authorName: 'reader01',
     parentId: null,
     path: '/',
@@ -131,8 +131,8 @@ const demoComments = [
     updatedAt: daysAgo(22)
   },
   {
-    postId: NumberLong(4),
-    authorId: NumberLong(7),
+    postId: NumberLong("4"),
+    authorId: NumberLong("7"),
     authorName: 'reader02',
     parentId: null,
     path: '/',
@@ -173,8 +173,8 @@ for (let i = 0; i < 4000; i++) {
 
   const doc = {
     _id: id,
-    postId: NumberLong(postId),
-    authorId: NumberLong(user.id),
+    postId: NumberLong(String(postId)),
+    authorId: NumberLong(String(user.id)),
     authorName: user.name,
     parentId: null,
     path: '/',
@@ -205,7 +205,7 @@ for (let i = 0; i < 1000; i++) {
 
   replies.push({
     postId: parent.postId,
-    authorId: NumberLong(user.id),
+    authorId: NumberLong(String(user.id)),
     authorName: user.name,
     parentId: parent._id,
     // Path is the parent's path plus the parent's own id.
@@ -246,8 +246,8 @@ for (let i = 0; i < 2000 && reviews.length < 1500; i++) {
   const created = daysAgo(randInt(1, 700));
 
   const doc = {
-    postId: NumberLong(postId),
-    reviewerId: NumberLong(user.id),
+    postId: NumberLong(String(postId)),
+    reviewerId: NumberLong(String(user.id)),
     reviewerName: user.name,
     rating: NumberInt(rating),
     headline: 'Generated review: ' + ['weak', 'mixed', 'fair', 'good', 'excellent'][rating - 1],

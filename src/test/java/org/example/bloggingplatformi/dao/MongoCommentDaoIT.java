@@ -38,6 +38,9 @@ class MongoCommentDaoIT {
     /** Well outside the seeded range of 1..508. */
     private static final long TEST_POST_ID = 9_000_001L;
 
+    /** Well outside the seeded user range of 1..207. */
+    private static final long TEST_AUTHOR_ID = 9_000_077L;
+
     private CommentDao comments;
     private ReviewDao reviews;
 
@@ -140,6 +143,22 @@ class MongoCommentDaoIT {
     }
 
     @Test
+    @DisplayName("a visible reply to a hidden comment keeps its place in the thread")
+    void hiddenParentKeepsVisibleReply() {
+        // Mirrors the relational CTE, which filters on status after ordering.
+        String firstId = comments.insert(Comment.newRoot(TEST_POST_ID, 2L, "ada_l", "Hidden root."));
+        Comment first = comments.findById(firstId).orElseThrow();
+        comments.insert(Comment.newReply(first, 3L, "grace_h", "Visible reply."));
+        comments.insert(Comment.newRoot(TEST_POST_ID, 4L, "linus_t", "Later root."));
+        comments.updateStatus(firstId, CommentStatus.HIDDEN);
+
+        List<Comment> thread = comments.findByPostId(TEST_POST_ID, false);
+
+        assertEquals(List.of("Visible reply.", "Later root."),
+                thread.stream().map(Comment::body).toList());
+    }
+
+    @Test
     @DisplayName("deleting a comment removes its whole subtree, with no cascade to rely on")
     void deleteRemovesSubtree() {
         String rootId = comments.insert(Comment.newRoot(TEST_POST_ID, 2L, "ada_l", "Root."));
@@ -180,10 +199,12 @@ class MongoCommentDaoIT {
     @DisplayName("renaming an author rewrites every denormalized copy")
     void renameAuthorUpdatesCopies() {
         // The cost of avoiding a cross-store join on every comment read.
-        comments.insert(Comment.newRoot(TEST_POST_ID, 77L, "old_name", "One."));
-        comments.insert(Comment.newRoot(TEST_POST_ID, 77L, "old_name", "Two."));
+        // The author id must be outside the seeded user range (1..207): a
+        // rename is global, so a seeded id would rewrite real seed comments.
+        comments.insert(Comment.newRoot(TEST_POST_ID, TEST_AUTHOR_ID, "old_name", "One."));
+        comments.insert(Comment.newRoot(TEST_POST_ID, TEST_AUTHOR_ID, "old_name", "Two."));
 
-        long updated = comments.renameAuthor(77L, "new_name");
+        long updated = comments.renameAuthor(TEST_AUTHOR_ID, "new_name");
 
         assertEquals(2, updated);
         assertTrue(comments.findByPostId(TEST_POST_ID, true).stream()

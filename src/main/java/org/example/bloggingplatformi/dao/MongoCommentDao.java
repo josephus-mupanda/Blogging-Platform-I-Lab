@@ -2,12 +2,16 @@ package org.example.bloggingplatformi.dao;
 
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.Deque;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 import com.mongodb.MongoException;
@@ -80,17 +84,24 @@ public class MongoCommentDao implements CommentDao {
 
     @Override
     public List<Comment> findByPostId(long postId, boolean includeHidden) {
-        Bson filter = includeHidden
-                ? Filters.eq(F_POST_ID, postId)
-                : Filters.and(Filters.eq(F_POST_ID, postId),
-                              Filters.eq(F_STATUS, CommentStatus.VISIBLE.name()));
-
-        // Sorting by path then createdAt puts every reply directly beneath its
-        // parent, because a child's path is its parent's path extended. The
-        // relational side needs a recursive CTE to produce the same ordering.
-        return run(() -> collect(comments()
-                .find(filter)
-                .sort(Sorts.ascending(F_PATH, F_CREATED_AT))));
+        // A stored path holds the ancestors only, so every root shares "/" and
+        // sorting by path alone would list all roots before any reply. Instead
+        // read the post's comments in chronological order (one query on
+        // idx_comments_post_created) and walk the tree depth-first, which is
+        // the order the relational recursive CTE produces.
+        //
+        // Hidden comments are filtered after the walk, not in the query, for
+        // the same reason the CTE filters last: a visible reply to a hidden
+        // comment must keep its place in the thread rather than vanish.
+        return run(() -> {
+            List<Comment> thread = threadOrder(collect(comments()
+                    .find(Filters.eq(F_POST_ID, postId))
+                    .sort(Sorts.ascending(F_CREATED_AT, "_id"))));
+            if (!includeHidden) {
+                thread.removeIf(c -> c.status() != CommentStatus.VISIBLE);
+            }
+            return thread;
+        });
     }
 
     @Override
@@ -126,8 +137,8 @@ public class MongoCommentDao implements CommentDao {
             result.add(map(root));
             result.addAll(collect(comments()
                     .find(descendants)
-                    .sort(Sorts.ascending(F_PATH, F_CREATED_AT))));
-            return result;
+                    .sort(Sorts.ascending(F_CREATED_AT, "_id"))));
+            return threadOrder(result);
         });
     }
 
@@ -282,6 +293,47 @@ public class MongoCommentDao implements CommentDao {
     // -----------------------------------------------------------------
     // Mapping and plumbing
     // -----------------------------------------------------------------
+
+    /**
+     * Reorders comments, given in chronological order, into thread order: each
+     * comment followed by its replies, depth-first, siblings oldest first.
+     *
+     * <p>A comment whose parent is not in the list is treated as a root, so a
+     * partial result (a subtree, or a thread with a missing parent) loses
+     * nothing. Runs in O(n).
+     */
+    static List<Comment> threadOrder(List<Comment> chronological) {
+        Set<String> present = new HashSet<>();
+        for (Comment c : chronological) {
+            present.add(c.commentId());
+        }
+
+        List<Comment> roots = new ArrayList<>();
+        Map<String, List<Comment>> children = new HashMap<>();
+        for (Comment c : chronological) {
+            if (c.parentId() == null || !present.contains(c.parentId())) {
+                roots.add(c);
+            } else {
+                children.computeIfAbsent(c.parentId(), k -> new ArrayList<>()).add(c);
+            }
+        }
+
+        // Iterative, so a pathologically deep thread cannot overflow the stack.
+        List<Comment> ordered = new ArrayList<>(chronological.size());
+        Deque<Comment> stack = new ArrayDeque<>();
+        for (int i = roots.size() - 1; i >= 0; i--) {
+            stack.push(roots.get(i));
+        }
+        while (!stack.isEmpty()) {
+            Comment c = stack.pop();
+            ordered.add(c);
+            List<Comment> kids = children.getOrDefault(c.commentId(), List.of());
+            for (int i = kids.size() - 1; i >= 0; i--) {
+                stack.push(kids.get(i));
+            }
+        }
+        return ordered;
+    }
 
     private static List<Comment> collect(FindIterable<Document> documents) {
         List<Comment> comments = new ArrayList<>();

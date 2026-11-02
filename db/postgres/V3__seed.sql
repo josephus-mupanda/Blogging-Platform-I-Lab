@@ -12,6 +12,12 @@
 --
 -- setseed() makes the generated data reproducible across machines, so
 -- benchmark numbers are comparable.
+--
+-- Every "pick a random row" subquery below references the outer row
+-- (`WHERE g IS NOT NULL`, `WHERE p.post_id IS NOT NULL`). Without that,
+-- the subquery is uncorrelated, PostgreSQL evaluates it once as an
+-- InitPlan, and every generated row gets the *same* random pick: all
+-- posts by one author, all comments on one post, one review in total.
 -- =====================================================================
 
 BEGIN;
@@ -147,7 +153,8 @@ SELECT author_id,
        created_at
 FROM (
     SELECT g,
-           (SELECT user_id FROM users ORDER BY random() LIMIT 1) AS author_id,
+           (SELECT user_id FROM users WHERE g IS NOT NULL
+             ORDER BY random() LIMIT 1)                         AS author_id,
            (ARRAY['Understanding','Debugging','Scaling','Refactoring','Benchmarking',
                   'Rethinking','Profiling','Simplifying'])[1 + (g % 8)]
              || ' ' ||
@@ -175,14 +182,15 @@ INSERT INTO post_tags (post_id, tag_id)
 SELECT DISTINCT p.post_id, t.tag_id
 FROM posts p
 CROSS JOIN LATERAL (
-    SELECT tag_id FROM tags ORDER BY random() LIMIT 1 + floor(random() * 4)::int
+    SELECT tag_id FROM tags WHERE p.post_id IS NOT NULL
+    ORDER BY random() LIMIT 1 + floor(random() * 4)::int
 ) t
 WHERE p.post_id > 8;
 
 -- ~4 000 top-level comments.
 INSERT INTO comments (post_id, author_id, parent_comment_id, body, status, created_at)
 SELECT p.post_id,
-       (SELECT user_id FROM users ORDER BY random() LIMIT 1),
+       (SELECT user_id FROM users WHERE g IS NOT NULL ORDER BY random() LIMIT 1),
        NULL,
        'Generated comment ' || g || ' on post ' || p.post_id ||
        '. ' || (ARRAY['Useful breakdown, thanks.',
@@ -196,13 +204,14 @@ SELECT p.post_id,
        p.created_at + (random() * INTERVAL '60 days')
 FROM generate_series(1, 4000) AS g
 CROSS JOIN LATERAL (
-    SELECT post_id, created_at FROM posts ORDER BY random() LIMIT 1
+    SELECT post_id, created_at FROM posts WHERE g IS NOT NULL
+    ORDER BY random() LIMIT 1
 ) p;
 
 -- ~1 000 replies, attached to a parent on the same post (FK integrity by construction).
 INSERT INTO comments (post_id, author_id, parent_comment_id, body, created_at)
 SELECT parent.post_id,
-       (SELECT user_id FROM users ORDER BY random() LIMIT 1),
+       (SELECT user_id FROM users WHERE g IS NOT NULL ORDER BY random() LIMIT 1),
        parent.comment_id,
        'Generated reply ' || g || '. ' ||
        (ARRAY['Agreed.',
@@ -216,11 +225,12 @@ CROSS JOIN LATERAL (
     SELECT comment_id, post_id, created_at
     FROM comments
     WHERE parent_comment_id IS NULL
+      AND g IS NOT NULL
     ORDER BY random()
     LIMIT 1
 ) parent;
 
--- ~1 500 reviews. DISTINCT ON enforces the one-per-user-per-post rule
+-- ~2 000 reviews (2 000 candidates less duplicate pairs). DISTINCT ON enforces the one-per-user-per-post rule
 -- before the UNIQUE constraint has to reject anything.
 INSERT INTO reviews (post_id, reviewer_id, rating, headline, body)
 SELECT DISTINCT ON (post_id, reviewer_id)
@@ -230,10 +240,12 @@ SELECT DISTINCT ON (post_id, reviewer_id)
        'Generated review: ' || (ARRAY['excellent','good','fair','mixed','weak'])[6 - rating],
        CASE WHEN rating >= 4 THEN 'Clear and well evidenced.' ELSE NULL END
 FROM (
-    SELECT (SELECT post_id FROM posts ORDER BY random() LIMIT 1) AS post_id,
-           (SELECT user_id FROM users ORDER BY random() LIMIT 1) AS reviewer_id,
+    SELECT (SELECT post_id FROM posts WHERE g IS NOT NULL
+            ORDER BY random() LIMIT 1)                           AS post_id,
+           (SELECT user_id FROM users WHERE g IS NOT NULL
+            ORDER BY random() LIMIT 1)                           AS reviewer_id,
            1 + floor(random() * 5)::int                          AS rating
-    FROM generate_series(1, 2000)
+    FROM generate_series(1, 2000) AS g
 ) candidates
 WHERE NOT EXISTS (
     SELECT 1 FROM reviews r

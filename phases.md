@@ -78,13 +78,12 @@ status is updated the moment the step changes state** — not at the end of a ph
 | 2.10 | Service layer: User, Post, Tag, Comment, Review | `DONE` | `PostServiceTest` — 16 tests |
 | 2.11 | Exception hierarchy + field-level validation collector | `DONE` | `ValidationExceptionTest` — 8 tests |
 | 2.12 | Utilities: `Slugs`, `Excerpts` | `DONE` | `SlugsTest` (15), `ExcerptsTest` (7) |
-| 2.13 | Test suite with graceful skip when a database is absent | `DONE` | `mvn test` — **137 passing, 0 failures** |
-| 2.14 | **Execute** the SQL/Mongo scripts against live servers | `BLOCKED` | `blogging_platform` DB not created; MongoDB not installed. Unblocked by step 3.0. |
+| 2.13 | Test suite with graceful skip when a database is absent | `DONE` | `mvn test` — **166 run, 0 failures, 0 skipped** against live servers |
+| 2.14 | **Execute** the SQL/Mongo scripts against live servers | `DONE` | All six scripts run clean on PostgreSQL 18.3 / MongoDB 9.0.4; `PostgresDaoIT` (14) and `MongoCommentDaoIT` (15) pass live |
 
-> **Known gap:** every DAO is written and compiles, but no SQL has executed against a
-> live server. `PostgresDaoIT` (18 tests) and `MongoCommentDaoIT` (13 tests) exist and
-> skip themselves until that changes. Until step 2.14 closes, the persistence layer is
-> verified at unit level only.
+> **Gap closed 2026-11-02.** Running against live servers found three real defects that
+> unit tests could not: the SQL seed generated skewed data, Mongo threads were ordered
+> wrongly, and one IT mutated seeded data. See the change log for each.
 
 ---
 
@@ -96,7 +95,7 @@ management console.
 
 | # | Step | Status | Evidence |
 |:---:|---|:---:|---|
-| 3.0 | Bring both databases up and run the scripts (unblocks 2.14) | `BLOCKED` | Needs the `postgres` password for port 5433, and a MongoDB install |
+| 3.0 | Bring both databases up and run the scripts (unblocks 2.14) | `DONE` | `blogging_platform` created on both servers; row counts in the change log |
 | 3.1 | Design system: colour tokens, typography scale, spacing, elevation | `DONE` | `css/app.css`, ~660 lines; app launches with zero CSS parse warnings |
 | 3.2 | Application shell: sidebar nav, top bar, content host, routing | `DONE` | `ui/AppShell.java`; verified in `docs/screenshots/01-dashboard-no-database.png` |
 | 3.3 | UI infrastructure: `Async`, `Dialogs`, `Session`, `Icons`, `Styles`, `View` | `DONE` | `ui/` package; every service call goes through `Async` |
@@ -109,18 +108,18 @@ management console.
 | 3.10 | Remove the `HelloApplication` scaffold; wire the new entry point | `DONE` | Scaffold deleted; `pom.xml` mainClass + `module-info` updated; `mvn compile` passes |
 | 3.11 | Verify the app launches without an unhandled exception | `DONE` | Ran under `mvn javafx:run`; log clean, window captured |
 | 3.14 | Responsive layout: no overflow on a 1280x720 logical screen | `DONE` | Window 1882x1004 physical inside a 1920x1008 work area; 4 screens captured DPI-aware, no horizontal scrollbar |
-| 3.12 | Verify every CRUD path end to end against a live database | `BLOCKED` | Waiting on step 3.0. Nothing has been created, edited or deleted for real yet. |
-| 3.13 | Screenshots of each screen with real data, for Testing Evidence | `BLOCKED` | 4 screens captured in `docs/screenshots/`, but with an empty database; real-data captures wait on step 3.0 |
+| 3.12 | Verify every CRUD path end to end against a live database | `PENDING` | Unblocked by 3.0. DAO-level CRUD passes live; not yet exercised through the UI. |
+| 3.13 | Screenshots of each screen with real data, for Testing Evidence | `PENDING` | 4 screens captured in `docs/screenshots/` with an empty database; real-data captures now possible |
 
 > **Known gap:** the UI is built, launches cleanly and handles an unreachable database
-> correctly, but **no CRUD operation has been performed against a live database**. Steps
-> 3.12 and 3.13 stay `BLOCKED` until step 3.0 closes. What the screenshot proves is that
+> correctly, but **no CRUD operation has yet been performed through the UI**. The DAOs
+> beneath it now pass against live servers (step 2.14); steps 3.12 and 3.13 are next. What the screenshot proves is that
 > the application starts, renders and degrades gracefully — not that saving a post works.
 
 **Exit criteria**
 
 - `mvn clean javafx:run` launches without an unhandled exception. **Met.**
-- Every CRUD path works from the UI, against a live database. *Not met — blocked on 3.0.*
+- Every CRUD path works from the UI, against a live database. *Not met — step 3.12.*
 - No database call runs on the JavaFX application thread. **Met** — every call goes
   through `Async`, which runs on a daemon pool and marshals results back.
 - The UI is visually coherent: one type scale, one colour palette, consistent spacing.
@@ -141,12 +140,12 @@ management console.
 | 4.2 | Cache invalidation on every write, proven by test (no stale read) | `DONE` | `CachedPostDaoTest` — 15 tests; a recording DAO counts calls, so a hit is a call that did not happen and a stale read is caught directly |
 | 4.3 | Inverted index `Map<String, Set<Long>>` for O(1) keyword candidates | `DONE` | `algo/InvertedIndex.java`; 11 tests, incl. agreement with a linear scan over 400 documents |
 | 4.4 | Own merge sort + binary search | `DONE` | `algo/Sorting.java`; 15 tests, incl. stability and agreement with `Collections.sort`/`binarySearch` on random data |
-| 4.5 | `EXPLAIN ANALYZE` captured before/after `V2__indexes.sql` | `BLOCKED` | Needs step 3.0 |
-| 4.6 | B-tree vs GIN/trigram comparison for text search | `BLOCKED` | Needs step 3.0 |
-| 4.7 | Keyset vs OFFSET pagination at depth | `BLOCKED` | Needs step 3.0 |
+| 4.5 | `EXPLAIN ANALYZE` captured before/after `V2__indexes.sql` | `PENDING` | Unblocked by 3.0 |
+| 4.6 | B-tree vs GIN/trigram comparison for text search | `PENDING` | Unblocked by 3.0 |
+| 4.7 | Keyset vs OFFSET pagination at depth | `PENDING` | Unblocked by 3.0 |
 | 4.8 | Benchmark harness: warm-up, N iterations, median, CSV output | `DONE` | `benchmark/Benchmark.java`, `BenchmarkResult.java`; 10 tests, incl. proof the median ignores an injected outlier |
-| 4.9 | SQL vs NoSQL: same workloads through both `CommentDao` impls | `BLOCKED` | Harness ready; needs step 3.0 for data |
-| 4.10 | `docs/02-performance-report.md` with real numbers | `BLOCKED` | Deliberately not started: writing it before 4.5–4.9 would mean inventing the numbers |
+| 4.9 | SQL vs NoSQL: same workloads through both `CommentDao` impls | `PENDING` | Harness ready, data loaded |
+| 4.10 | `docs/02-performance-report.md` with real numbers | `BLOCKED` | Waits on measurements from 4.5–4.9; writing it first would mean inventing the numbers |
 | 4.11 | `docs/03-sql-vs-nosql.md` with the trade-off analysis | `BLOCKED` | Same reason as 4.10 |
 | 4.12 | Final README, design doc revision, testing evidence assembled | `PENDING` | — |
 
@@ -171,7 +170,7 @@ Documentation (10 pts).
 | Performance Report | `PENDING` | `docs/02-performance-report.md` |
 | SQL vs NoSQL Comparison | `PENDING` | `docs/03-sql-vs-nosql.md` |
 | README | `DONE` | `README.md` |
-| Testing Evidence | `WIP` | **137 passing tests**; 1 screenshot, more pending a live DB |
+| Testing Evidence | `WIP` | **166 passing tests, incl. 29 live-database ITs**; real-data screenshots pending (3.13) |
 
 ---
 
@@ -225,3 +224,22 @@ Documentation (10 pts).
   Note: the first round of screenshots was misleading - the capturing process was
   not DPI-aware, so it grabbed only the top-left corner of the window and the crop
   looked like overflow. Corrected before drawing any conclusion from it.
+- **2026-11-02** — Step 3.0 done: `blogging_platform` created on PostgreSQL 18.3 (port
+  5433) and MongoDB 9.0.4, all six scripts executed. Running live exposed three defects:
+  (1) **Seed skew.** Every `(SELECT ... ORDER BY random() LIMIT 1)` in `V3__seed.sql` was
+  uncorrelated, so PostgreSQL ran it once as an InitPlan: all 500 generated posts had one
+  author, every post the same tags, all 5 000 comments sat on one post, and the review
+  generator produced 1 row instead of ~1 500. Each subquery now references the outer
+  row. Re-seeded: posts by 191 authors, comments on all 508 posts (max 30 per post),
+  1 982 reviews. Phase 4 benchmarks on the old data would have been meaningless.
+  (2) **Mongo thread order.** `path` stores ancestors only, so every root has `"/"` and
+  sorting by `path` listed all roots before any reply; the detail view indented replies
+  under the wrong comment. `MongoCommentDao` now reads chronologically and walks the
+  tree depth-first, matching the SQL CTE, including filtering hidden comments *after*
+  ordering. New IT `hiddenParentKeepsVisibleReply`.
+  (3) **IT mutated the seed.** `renameAuthorUpdatesCopies` used author 77, a real seeded
+  user, and renamed 26 of their seeded comments. Now uses an id outside the seeded range.
+  Also: `03-seed.js` passes `NumberLong` values as strings (removes driver warnings).
+  Final counts — PostgreSQL: users 207, posts 508, tags 12, post_tags 1 259,
+  comments 5 008, reviews 1 982. MongoDB: comments 5 005, reviews 1 500.
+  `mvn test`: **166 run, 0 failures, 0 skipped**; seed counts unchanged after the run.
