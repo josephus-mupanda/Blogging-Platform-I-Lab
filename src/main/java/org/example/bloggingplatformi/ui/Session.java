@@ -9,16 +9,9 @@ import org.example.bloggingplatformi.model.Role;
 import org.example.bloggingplatformi.model.User;
 
 /**
- * Who is currently acting in the application.
- *
- * <p>This is a user *switcher*, not authentication. Password verification is
- * explicitly out of scope for this stage of the project, and pretending
- * otherwise by checking a hash the seed data does not really contain would be
- * worse than being clear about it: the UI needs an author to attribute posts
- * and comments to, and this supplies one.
- *
- * <p>Held as an observable property so the header and the permission-sensitive
- * controls update themselves when the acting user changes.
+ * Keeps track of the user who is signed in.
+ * It is set by the sign in screen and cleared by "Sign out".
+ * The views ask it what the current user is allowed to do.
  */
 public final class Session {
 
@@ -43,7 +36,7 @@ public final class Session {
         return CURRENT.get() != null;
     }
 
-    /** The acting user's id, or 0 when nobody is selected. */
+    /** The signed-in user's id, or 0 when nobody is signed in. */
     public static long currentUserId() {
         User user = CURRENT.get();
         return user == null ? 0L : user.userId();
@@ -51,7 +44,7 @@ public final class Session {
 
     public static String currentDisplayName() {
         User user = CURRENT.get();
-        return user == null ? "No user selected" : user.displayName();
+        return user == null ? "Not signed in" : user.displayName();
     }
 
     public static Role currentRole() {
@@ -64,8 +57,13 @@ public final class Session {
         return isSignedIn() && currentRole().canPublish();
     }
 
-    /** Only an admin sees the moderation queue. */
+    /** Only an admin sees the moderation queue and the Manage screens. */
     public static boolean canModerate() {
         return isSignedIn() && currentRole().canModerate();
+    }
+
+    /** A post can be edited or deleted by its own author, or by an admin. */
+    public static boolean canEditPost(long postAuthorId) {
+        return canModerate() || (canPublish() && postAuthorId == currentUserId());
     }
 }

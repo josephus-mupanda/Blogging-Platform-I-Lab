@@ -11,16 +11,18 @@ import org.example.bloggingplatformi.exception.EntityNotFoundException;
 import org.example.bloggingplatformi.exception.ValidationException;
 import org.example.bloggingplatformi.model.Role;
 import org.example.bloggingplatformi.model.User;
+import org.example.bloggingplatformi.util.Passwords;
 
 /**
- * Business rules for user accounts: validation, uniqueness checks and the
- * cross-store bookkeeping a rename implies.
+ * Business rules for user accounts. It validates input, checks that usernames
+ * and emails are not taken, and keeps comment author names up to date.
  */
 public class UserService {
 
     private static final Pattern EMAIL = Pattern.compile("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$");
     private static final int MIN_USERNAME = 3;
     private static final int MAX_USERNAME = 50;
+    private static final int MIN_PASSWORD = 6;
 
     private final UserDao userDao;
     private final CommentDao commentDao;
@@ -60,13 +62,8 @@ public class UserService {
     }
 
     /**
-     * Creates an account.
-     *
-     * <p>The uniqueness checks here exist to produce a readable message, not
-     * to guarantee uniqueness. Between this check and the insert another
-     * session can take the same username; {@code uq_users_username} is what
-     * actually prevents the duplicate, and the DAO turns that violation into a
-     * {@code DuplicateEntityException}.
+     * Creates an account. The checks here give the user a clear message.
+     * The unique constraint in the database still blocks a duplicate that slips past them.
      */
     public User create(String username, String email, String passwordHash,
                        String displayName, String bio, Role role) {
@@ -96,13 +93,48 @@ public class UserService {
     }
 
     /**
-     * Updates a profile.
-     *
-     * <p>A display-name change also rewrites the denormalized {@code authorName}
-     * on every comment that user left. In the relational store that is a no-op,
-     * because the name is reached by join; in MongoDB it is a real write across
-     * the collection. Doing it here, rather than in the DAO, keeps the rule in
-     * one place regardless of which store is active.
+     * Sign up: creates a blogger (AUTHOR) or READER account with a hashed password.
+     * Nobody can sign up as ADMIN; the admin account comes from the seed script.
+     */
+    public User register(String username, String email, String password,
+                         String displayName, Role role) {
+        ValidationException.Collector errors = new ValidationException.Collector();
+        errors.rejectIf(password == null || password.length() < MIN_PASSWORD,
+                "password", "Passwords must be at least " + MIN_PASSWORD + " characters.");
+        errors.rejectIf(role == Role.ADMIN,
+                "role", "You can only sign up as a blogger or a reader.");
+        errors.throwIfInvalid();
+
+        return create(username, email, Passwords.hash(password), displayName, null, role);
+    }
+
+    /**
+     * Sign in: returns the user if the username and password are correct.
+     * The same message is used for a wrong username and a wrong password,
+     * so the screen does not tell a stranger which usernames exist.
+     */
+    public User login(String username, String password) {
+        ValidationException.Collector errors = new ValidationException.Collector();
+        errors.rejectIf(username == null || username.isBlank(), "username", "Enter your username.");
+        errors.rejectIf(password == null || password.isEmpty(), "password", "Enter your password.");
+        errors.throwIfInvalid();
+
+        Optional<User> found = userDao.findByUsername(username.strip());
+        if (found.isEmpty() || !Passwords.matches(password, found.get().passwordHash())) {
+            errors.reject("password", "Wrong username or password.");
+            errors.throwIfInvalid();
+        }
+        User user = found.get();
+        if (!user.active()) {
+            errors.reject("username", "This account has been deactivated by an admin.");
+            errors.throwIfInvalid();
+        }
+        return user;
+    }
+
+    /**
+     * Updates the display name and bio. If the name changes, the name is also
+     * updated on the user's comments, because MongoDB stores a copy of it there.
      */
     public User updateProfile(long userId, String displayName, String bio) {
         User existing = require(userId);
@@ -133,8 +165,8 @@ public class UserService {
     }
 
     /**
-     * Deletes the account. Their posts cascade away with them; their comments
-     * survive with a null author, per the schema's FK rules.
+     * Deletes the account. The database also deletes the user's posts.
+     * Their comments stay, with no author.
      */
     public boolean delete(long userId) {
         return userDao.deleteById(userId);
@@ -157,7 +189,7 @@ public class UserService {
             errors.reject("email", "An email address is required.");
             return;
         }
-        // Mirrors ck_users_email so the message arrives before the constraint does.
+        // Same rule as the ck_users_email check in the database, but with a friendly message.
         errors.rejectIf(!EMAIL.matcher(email.strip()).matches(),
                 "email", "That does not look like an email address.");
     }
