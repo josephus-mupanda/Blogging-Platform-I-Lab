@@ -129,7 +129,7 @@ rather than returning it.
 
 | Rule | PostgreSQL | MongoDB |
 |---|---|---|
-| A comment belongs to an existing post | `FOREIGN KEY` | **Nothing.** `postId` is a number. The service layer deletes a post's comments and reviews before the post itself (`PostListView` → `CommentService.deleteForPost`) |
+| A comment belongs to an existing post | `FOREIGN KEY` | **Nothing.** `postId` is a number. The service layer deletes a post's comments and reviews before the post itself (`PostListController` → `CommentService.deleteForPost`) |
 | Deleting a comment removes its replies | `ON DELETE CASCADE` | Explicit prefix `deleteMany` in `MongoCommentDao.deleteWithReplies` |
 | One review per user per post | `UNIQUE` constraint | Unique index `uq_reviews_post_reviewer` |
 | Rating between 1 and 5 | `CHECK` | `$jsonSchema` `minimum`/`maximum` |

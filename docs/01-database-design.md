@@ -360,8 +360,8 @@ Schema validation is enforced with `$jsonSchema` at `validationLevel: "strict"`,
 - `tags.tag_id` stays `SERIAL` - a tag vocabulary is bounded in the thousands.
 - All timestamps are `TIMESTAMPTZ`, never `TIMESTAMP`: readers sit in multiple timezones
   and a naive timestamp silently loses that.
-- The demo seed holds roughly 500 posts and 5 000 comments: enough for the UI, still
-  index-immune. Phase 4 measured on a separate database built by `db/bench/scale.sql`
+- The app database starts with only the admin account; all other data is entered
+  through the app, so it is far too small for indexes to matter. Phase 4 measured on a separate database built by `db/bench/scale.sql`
   (100 000 posts, 630 000 comments, 260 000 reviews), where the index decisions in §5
   show up as 11× to 1,300× differences; see `docs/02-performance-report.md`.
 

@@ -35,7 +35,7 @@ index in place.
 
 ### 2.1 Dataset
 
-The demo seed (508 posts) is useless for this purpose: every table fits in a few pages,
+The app database (filled by hand through the app) is too small for this purpose: every table fits in a few pages,
 and PostgreSQL rightly seq-scans it whether indexes exist or not. The benchmark runs
 against a separate database, built by [`db/bench/scale.sql`](../db/bench/scale.sql):
 
@@ -309,6 +309,14 @@ loaded into memory.
 | 100 lookups by slug | linear scan 233.2 ms | `HashMap` 7.6 µs | ~30 000× |
 | 1 000 lookups in sorted ids | `linearSearch` 154.9 ms | `binarySearch` 0.39 ms | **397×** |
 | Sort 100 000 posts by views | `List.sort` (TimSort) 110.5 ms | own `mergeSort` 97.8 ms | ~1.1× (parity) |
+
+> **Note on the sort row.** After this run, `Sorting.mergeSort` was rewritten as the
+> simple textbook version (split the list, sort each half, merge), so the code is easier
+> to read. A standalone re-measure of the new version on 100 000 in-memory rows sorted by
+> views (3 warm-ups, median of 15) gave **50.4 ms** for `mergeSort` against **43.4 ms**
+> for `List.sort`, with identical output. That is a different harness from the CSV
+> above, so the two pairs of numbers should not be compared with each other. The
+> conclusion is the same: the two sorts are at parity.
 
 - **Inverted index.** Building it takes 1.35 s for 100 000 titles. It pays for itself
   after about five searches. Lookups are hash probes plus an intersection that starts
