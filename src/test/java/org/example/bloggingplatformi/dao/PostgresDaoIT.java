@@ -34,15 +34,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
- * Integration tests for the PostgreSQL DAOs.
- *
- * <p>These run against a real server with the scripts in {@code db/postgres}
- * applied. When PostgreSQL is not reachable every test is skipped rather than
- * failed: a red build caused by a stopped service teaches people to ignore red
- * builds, and a green one that touched no database would be a lie.
- *
- * <p>Each test creates the rows it needs and removes them afterwards, so the
- * suite can run repeatedly against the seeded database without corrupting it.
+ * Integration tests for the PostgreSQL DAOs, run against a real database.
+ * If PostgreSQL is not running, the tests are skipped, not failed.
+ * Each test creates its own rows and deletes them at the end, so the seed data stays the same.
  */
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class PostgresDaoIT {
@@ -68,8 +62,7 @@ class PostgresDaoIT {
 
     @BeforeEach
     void createAuthor() {
-        // A unique suffix per run, so repeated runs do not collide on
-        // uq_users_username.
+        // A unique suffix, so the username is new on every run.
         String suffix = String.valueOf(System.nanoTime());
         authorId = users.insert(User.newUser(
                 "it_user_" + suffix,
@@ -151,9 +144,13 @@ class PostgresDaoIT {
         @DisplayName("insert with tags, read back, then delete")
         void crudRoundTrip() {
             long postId = 0;
+            // Test-only tag names, deleted at the end, so the app's real tags are not touched.
+            String suffix = String.valueOf(System.nanoTime());
+            int javaTag = 0;
+            int sqlTag = 0;
             try {
-                int javaTag = tags.findOrCreate("java");
-                int sqlTag = tags.findOrCreate("sql");
+                javaTag = tags.findOrCreate("it-java-" + suffix);
+                sqlTag = tags.findOrCreate("it-sql-" + suffix);
 
                 String body = "Integration test body for the post DAO round trip.";
                 Post post = Post.builder()
@@ -177,6 +174,8 @@ class PostgresDaoIT {
                 if (postId > 0) {
                     posts.deleteById(postId);
                 }
+                tags.deleteById(javaTag);
+                tags.deleteById(sqlTag);
                 deleteAuthor();
             }
         }
@@ -253,7 +252,7 @@ class PostgresDaoIT {
                 assertEquals(1, next.content().size());
                 assertTrue(next.hasPrevious());
 
-                // Stable ordering: paging must not repeat a row.
+                // Page 2 must not repeat the row from page 1.
                 assertFalse(page.content().get(0).postId() == next.content().get(0).postId(),
                         "page 2 repeated a row from page 1, so the sort is not deterministic");
             } finally {
@@ -297,8 +296,7 @@ class PostgresDaoIT {
             try {
                 postId = insertSimplePost("Sort Coverage");
 
-                // Each fragment is concatenated into ORDER BY, so a typo in one
-                // of them is a runtime failure that only this test would catch.
+                // Each sort adds its own ORDER BY text, so a typo only shows up when the query runs.
                 for (PostSort sort : PostSort.values()) {
                     Page<PostSummary> page = posts.search(
                             PostFilter.all().withAuthorId(authorId).withSort(sort));
@@ -436,7 +434,7 @@ class PostgresDaoIT {
             try {
                 postId = insertSimplePost("No Reviews Yet");
 
-                // AVG over no rows is SQL NULL, which must not surface as 0.0.
+                // AVG over no rows is NULL. It should come back empty, not as 0.0.
                 assertTrue(reviews.averageRating(postId).isEmpty());
             } finally {
                 if (postId > 0) {
@@ -447,7 +445,7 @@ class PostgresDaoIT {
         }
     }
 
-    /** Inserts a minimal published post owned by the per-test author. */
+    /** Inserts a simple published post by the test author. */
     private long insertSimplePost(String title) {
         String body = title + " body text for integration testing purposes.";
         return posts.insertWithTags(Post.builder()
