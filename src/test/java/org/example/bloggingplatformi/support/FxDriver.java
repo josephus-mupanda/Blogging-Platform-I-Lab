@@ -33,13 +33,9 @@ import javafx.stage.Window;
 import org.example.bloggingplatformi.ui.Async;
 
 /**
- * Drives a live JavaFX scene the way a user would: find a control by what it
- * shows, type into it, press it, wait for the result.
- *
- * <p>Waiting is the part that makes UI tests flaky, so it is never a guessed
- * sleep. {@link #settle()} returns once {@link Async#inFlight()} has been zero
- * across two FX pulses, which means every query a click started has finished
- * and its result has been rendered.
+ * Helper for UI tests: finds controls by their text, types, clicks, and waits for results.
+ * {@link #settle()} waits until no background task is running ({@link Async#inFlight()} is 0)
+ * for two checks in a row, so the test does not rely on fixed sleeps.
  */
 public final class FxDriver {
 
@@ -65,7 +61,7 @@ public final class FxDriver {
     // Running on the FX thread
     // -----------------------------------------------------------------
 
-    /** Runs on the FX thread and waits for the result. */
+    /** Runs the code on the FX thread and waits for its result. */
     public static <T> T fx(Callable<T> work) {
         CompletableFuture<T> future = new CompletableFuture<>();
         Platform.runLater(() -> {
@@ -93,9 +89,8 @@ public final class FxDriver {
     }
 
     /**
-     * Fires without waiting. Needed for any click that opens a confirmation:
-     * {@code showAndWait} does not return until the dialog closes, so waiting
-     * on the click itself would deadlock the test against its own dialog.
+     * Clicks without waiting. Use it for a click that opens a confirm dialog:
+     * showAndWait blocks until the dialog closes, so waiting here would hang the test.
      */
     public static void clickLater(Button button) {
         Platform.runLater(button::fire);
@@ -114,7 +109,7 @@ public final class FxDriver {
         fxRun(() -> field.setText(text));
     }
 
-    /** Types then presses Enter, for fields whose action is bound to it. */
+    /** Types the text, then presses Enter. */
     public static void typeAndEnter(TextInputControl field, String text) {
         fxRun(() -> {
             field.setText(text);
@@ -131,8 +126,7 @@ public final class FxDriver {
         long deadline = System.currentTimeMillis() + TIMEOUT_MS;
         int quietPulses = 0;
         while (System.currentTimeMillis() < deadline) {
-            // A round trip through the FX queue flushes pending runLater
-            // callbacks, including task completion handlers.
+            // Running an empty task on the FX thread lets earlier queued callbacks finish first.
             fxRun(() -> { });
             if (Async.inFlight() == 0) {
                 if (++quietPulses >= 2) {
@@ -141,7 +135,7 @@ public final class FxDriver {
             } else {
                 quietPulses = 0;
                 if (findDialog().isPresent()) {
-                    // A dialog opened by a callback holds its task open.
+                    // A dialog is open and keeps its task running, so stop waiting.
                     return;
                 }
             }
@@ -151,7 +145,7 @@ public final class FxDriver {
                 + Async.inFlight() + " task(s) still running" + openDialogDescription());
     }
 
-    /** For timers the app owns, such as the search debounce. */
+    /** Sleeps for a fixed time. Used for app timers, such as the search delay. */
     public static void pause(long millis) {
         try {
             Thread.sleep(millis);
@@ -175,7 +169,7 @@ public final class FxDriver {
     // Finding nodes
     // -----------------------------------------------------------------
 
-    /** Every node under {@code root}, including skin internals and scroll content. */
+    /** Returns every node under root, including the content of scroll panes. */
     public static List<Node> descendants(Node root) {
         List<Node> out = new ArrayList<>();
         Set<Node> seen = Collections.newSetFromMap(new IdentityHashMap<>());
@@ -198,7 +192,7 @@ public final class FxDriver {
         }
     }
 
-    /** Visible on screen: itself and every ancestor visible. */
+    /** True if the node and all its parents are visible. */
     public static boolean showing(Node node) {
         for (Node n = node; n != null; n = n.getParent()) {
             if (!n.isVisible()) {
@@ -229,7 +223,7 @@ public final class FxDriver {
         return one(root, Button.class, b -> text.equals(b.getText()), "button '" + text + "'");
     }
 
-    /** Icon-only buttons are identified by their tooltip, which is what a user reads. */
+    /** Finds an icon-only button by its tooltip text. */
     public static Button buttonWithTooltip(Node root, String tooltip) {
         return one(root, Button.class,
                 b -> b.getTooltip() != null && tooltip.equals(b.getTooltip().getText()),
@@ -307,8 +301,8 @@ public final class FxDriver {
     // -----------------------------------------------------------------
 
     /**
-     * Saves the scene at the display's real pixel density, so a capture on a
-     * 150% display is as sharp as the window the user actually sees.
+     * Saves a screenshot of the scene as a PNG. It uses the screen's scale
+     * (for example 150%), so the image is as sharp as the real window.
      */
     public static void screenshot(Scene scene, Path target) {
         WritableImage image = fx(() -> {

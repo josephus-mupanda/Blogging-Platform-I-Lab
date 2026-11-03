@@ -1,9 +1,11 @@
 package org.example.bloggingplatformi.service;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import org.example.bloggingplatformi.algo.Sorting;
 import org.example.bloggingplatformi.dao.DaoFactory;
 import org.example.bloggingplatformi.dao.TagDao;
 import org.example.bloggingplatformi.exception.ValidationException;
@@ -25,8 +27,12 @@ public class TagService {
         this.tagDao = tagDao;
     }
 
+    /**
+     * All tags, sorted by name with our own merge sort (Sorting.mergeSort)
+     * instead of an SQL ORDER BY.
+     */
     public List<Tag> findAll() {
-        return tagDao.findAll();
+        return Sorting.mergeSort(tagDao.findAll(), Comparator.comparing(Tag::name));
     }
 
     public Optional<Tag> findByName(String name) {
@@ -37,12 +43,12 @@ public class TagService {
         return tagDao.findByPostId(postId);
     }
 
-    /** Backs the tag picker's type-ahead. */
+    /** Returns tags that start with the typed text, for the tag picker. */
     public List<Tag> suggest(String prefix) {
         return tagDao.searchByPrefix(prefix, AUTOCOMPLETE_LIMIT);
     }
 
-    /** Tag name to post count, most used first. Feeds the analytics screen. */
+    /** Maps each tag name to its number of posts, most used first. */
     public Map<String, Long> usageCounts(int limit) {
         return tagDao.usageCounts(limit);
     }
@@ -52,11 +58,8 @@ public class TagService {
     }
 
     /**
-     * Resolves a name to an id, creating the tag if it is new.
-     *
-     * <p>Normalization to lower case happens in {@link Tag} and again in the
-     * DAO, which matters: "Java", "java" and " JAVA " must all land on one row,
-     * or the vocabulary fragments and the tag filter stops being trustworthy.
+     * Returns the id of the tag with this name, creating the tag if it is new.
+     * Names are lower-cased, so "Java" and " JAVA " end up as the same tag.
      */
     public int findOrCreate(String name) {
         validateName(name);
@@ -64,8 +67,7 @@ public class TagService {
     }
 
     public boolean delete(int tagId) {
-        // post_tags rows go with it through ON DELETE CASCADE; the posts
-        // themselves are untouched.
+        // The database removes the tag's post_tags rows. The posts stay.
         return tagDao.deleteById(tagId);
     }
 

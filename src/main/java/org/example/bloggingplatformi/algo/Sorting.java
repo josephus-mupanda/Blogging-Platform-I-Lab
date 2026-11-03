@@ -5,21 +5,10 @@ import java.util.Comparator;
 import java.util.List;
 
 /**
- * Sorting and searching implemented directly, for Epic 3.2.
- *
- * <p>Java ships both of these, and production code should use what it ships.
- * These exist to be read and measured: Phase 4 benchmarks them against
- * {@code Collections.sort} and {@code Collections.binarySearch} and reports
- * the gap honestly rather than claiming a hand-written sort is faster.
+ * Hand-written merge sort and binary search.
+ * The benchmark compares them with Collections.sort and Collections.binarySearch.
  */
 public final class Sorting {
-
-    /**
-     * Below this length the recursion and array copying cost more than the
-     * quadratic comparisons they avoid. Real library sorts do the same thing;
-     * {@code java.util.Arrays} switches to insertion sort at 32.
-     */
-    private static final int INSERTION_SORT_THRESHOLD = 12;
 
     private Sorting() {
     }
@@ -29,88 +18,51 @@ public final class Sorting {
     // -----------------------------------------------------------------
 
     /**
-     * Sorts a copy of the list, leaving the input untouched.
+     * Merge sort: split the list in two, sort each half, then merge them.
+     * O(n log n) time, O(n) extra space. Returns a new sorted list.
      *
-     * <p><b>Merge sort, not quicksort.</b> Merge sort is <em>stable</em> —
-     * equal elements keep their original order — and that matters here: the
-     * post list sorts by date, and two posts sharing a timestamp must not swap
-     * places between one render and the next, or paging appears to duplicate
-     * and drop rows. Quicksort is not stable and its worst case is O(n²) on
-     * already-sorted input, which is exactly the shape data arrives in from an
-     * ORDER BY.
-     *
-     * <p>O(n log n) in every case; O(n) extra space for the merge buffer.
+     * Merge sort is stable: equal items keep their order. So two posts with the
+     * same date do not swap places between page loads.
      */
-    public static <T> List<T> mergeSort(List<T> input, Comparator<? super T> comparator) {
-        if (input == null || input.size() < 2) {
-            return input == null ? new ArrayList<>() : new ArrayList<>(input);
+    public static <T> List<T> mergeSort(List<T> input, Comparator<T> comparator) {
+        if (input == null) {
+            return new ArrayList<>();
         }
-        List<T> working = new ArrayList<>(input);
-
-        @SuppressWarnings("unchecked")
-        T[] source = (T[]) working.toArray();
-        @SuppressWarnings("unchecked")
-        T[] buffer = (T[]) new Object[source.length];
-
-        mergeSort(source, buffer, 0, source.length - 1, comparator);
-
-        return new ArrayList<>(List.of(source));
+        if (input.size() <= 1) {
+            return new ArrayList<>(input);
+        }
+        int middle = input.size() / 2;
+        List<T> left = mergeSort(input.subList(0, middle), comparator);
+        List<T> right = mergeSort(input.subList(middle, input.size()), comparator);
+        return merge(left, right, comparator);
     }
 
-    private static <T> void mergeSort(T[] array, T[] buffer, int low, int high,
-                                      Comparator<? super T> comparator) {
-        if (high - low < INSERTION_SORT_THRESHOLD) {
-            insertionSort(array, low, high, comparator);
-            return;
-        }
-        // (low + high) >>> 1, not (low + high) / 2: the sum overflows to a
-        // negative int for large arrays, which is the classic binary-search bug.
-        int mid = (low + high) >>> 1;
+    /** Merges two sorted lists into one sorted list. */
+    private static <T> List<T> merge(List<T> left, List<T> right, Comparator<T> comparator) {
+        List<T> result = new ArrayList<>(left.size() + right.size());
+        int i = 0;
+        int j = 0;
 
-        mergeSort(array, buffer, low, mid, comparator);
-        mergeSort(array, buffer, mid + 1, high, comparator);
-
-        // Already in order: the largest of the left half is no greater than
-        // the smallest of the right. Skipping the merge makes sorted input
-        // linear, which is the common case for data arriving from the database.
-        if (comparator.compare(array[mid], array[mid + 1]) <= 0) {
-            return;
-        }
-        merge(array, buffer, low, mid, high, comparator);
-    }
-
-    private static <T> void merge(T[] array, T[] buffer, int low, int mid, int high,
-                                  Comparator<? super T> comparator) {
-        System.arraycopy(array, low, buffer, low, high - low + 1);
-
-        int left = low;
-        int right = mid + 1;
-
-        for (int i = low; i <= high; i++) {
-            if (left > mid) {
-                array[i] = buffer[right++];
-            } else if (right > high) {
-                array[i] = buffer[left++];
-            } else if (comparator.compare(buffer[right], buffer[left]) < 0) {
-                array[i] = buffer[right++];
+        while (i < left.size() && j < right.size()) {
+            // On a tie we take from the left list. This keeps the sort stable.
+            if (comparator.compare(left.get(i), right.get(j)) <= 0) {
+                result.add(left.get(i));
+                i++;
             } else {
-                // <= takes from the left, which is what preserves stability.
-                array[i] = buffer[left++];
+                result.add(right.get(j));
+                j++;
             }
         }
-    }
-
-    private static <T> void insertionSort(T[] array, int low, int high,
-                                          Comparator<? super T> comparator) {
-        for (int i = low + 1; i <= high; i++) {
-            T key = array[i];
-            int j = i - 1;
-            while (j >= low && comparator.compare(array[j], key) > 0) {
-                array[j + 1] = array[j];
-                j--;
-            }
-            array[j + 1] = key;
+        // One list is empty now. Copy what is left of the other one.
+        while (i < left.size()) {
+            result.add(left.get(i));
+            i++;
         }
+        while (j < right.size()) {
+            result.add(right.get(j));
+            j++;
+        }
+        return result;
     }
 
     // -----------------------------------------------------------------
@@ -118,23 +70,18 @@ public final class Sorting {
     // -----------------------------------------------------------------
 
     /**
-     * Finds {@code key} in a list already sorted by {@code comparator}.
+     * Binary search: look at the middle item, then keep only the half that can
+     * hold the key. O(log n). The list must already be sorted.
      *
-     * <p>O(log n), and <b>only correct on a sorted list</b> — on unsorted input
-     * it does not fail, it quietly returns a wrong answer, which is why the
-     * caller must guarantee the ordering.
-     *
-     * @return an index of a matching element, or {@code -(insertionPoint) - 1}
-     *         when absent, matching {@link java.util.Collections#binarySearch}
-     *         so the two are interchangeable in a benchmark
+     * @return the index of a match, or -(insertionPoint) - 1 if not found,
+     *         the same as Collections.binarySearch
      */
-    public static <T> int binarySearch(List<? extends T> sorted, T key,
-                                       Comparator<? super T> comparator) {
+    public static <T> int binarySearch(List<T> sorted, T key, Comparator<T> comparator) {
         int low = 0;
         int high = sorted.size() - 1;
 
         while (low <= high) {
-            int mid = (low + high) >>> 1;
+            int mid = (low + high) / 2;
             int comparison = comparator.compare(sorted.get(mid), key);
 
             if (comparison < 0) {
@@ -149,19 +96,15 @@ public final class Sorting {
     }
 
     /**
-     * Index of the first element not ordered before {@code key}.
-     *
-     * <p>Where {@link #binarySearch} returns any match, this returns the
-     * <em>first</em> one, which is what a range query needs: with duplicates,
-     * "any match" is not enough to find where a run begins.
+     * Binary search for the first index whose item is not less than the key.
+     * Unlike binarySearch, this finds the first of several equal items. O(log n).
      */
-    public static <T> int lowerBound(List<? extends T> sorted, T key,
-                                     Comparator<? super T> comparator) {
+    public static <T> int lowerBound(List<T> sorted, T key, Comparator<T> comparator) {
         int low = 0;
         int high = sorted.size();
 
         while (low < high) {
-            int mid = (low + high) >>> 1;
+            int mid = (low + high) / 2;
             if (comparator.compare(sorted.get(mid), key) < 0) {
                 low = mid + 1;
             } else {
@@ -171,14 +114,8 @@ public final class Sorting {
         return low;
     }
 
-    /**
-     * Linear scan, kept for the benchmark.
-     *
-     * <p>It is the honest baseline: O(n) against binary search's O(log n), and
-     * the comparison is only meaningful if both are measured on the same data.
-     */
-    public static <T> int linearSearch(List<? extends T> items, T key,
-                                       Comparator<? super T> comparator) {
+    /** Checks every item in turn. O(n). Used in the benchmark to compare with binary search. */
+    public static <T> int linearSearch(List<T> items, T key, Comparator<T> comparator) {
         for (int i = 0; i < items.size(); i++) {
             if (comparator.compare(items.get(i), key) == 0) {
                 return i;
@@ -187,8 +124,8 @@ public final class Sorting {
         return -1;
     }
 
-    /** True if the list is ordered; used by tests to guard the binary searches. */
-    public static <T> boolean isSorted(List<? extends T> items, Comparator<? super T> comparator) {
+    /** True if the list is sorted. Used by tests before a binary search. */
+    public static <T> boolean isSorted(List<T> items, Comparator<T> comparator) {
         for (int i = 1; i < items.size(); i++) {
             if (comparator.compare(items.get(i - 1), items.get(i)) > 0) {
                 return false;

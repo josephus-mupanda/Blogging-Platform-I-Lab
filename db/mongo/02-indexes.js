@@ -1,59 +1,54 @@
 // =====================================================================
-// Smart Blogging Platform - MongoDB index strategy
-// Phase 1 / Epic 1 - User Story 1.2
+// Smart Blogging Platform: MongoDB indexes.
 //
 // Run as:  mongosh "mongodb://localhost:27017/blogging_platform" --file db/mongo/02-indexes.js
 //
-// Kept separate from 01-collections.js for the same reason the SQL indexes
-// are separate from the SQL schema: Phase 4 benchmarks the unindexed
-// baseline first. Use the drop block at the bottom to reset.
+// Kept apart from 01-collections.js so queries can be timed without
+// indexes first. Use the drop block at the bottom to remove them.
 // =====================================================================
 
-// The target database comes from the connection string in the mongosh
-// invocation, so `db` is already blogging_platform. Reassigning it with
-// `const db = db.getSiblingDB(...)` would throw: the new binding shadows
-// the global before the right-hand side can read it.
+// `db` already points at blogging_platform because of the connection string.
+// Do not write `const db = db.getSiblingDB(...)`: it throws an error.
 
 // ---------------------------------------------------------------------
 // comments
 // ---------------------------------------------------------------------
 
-// The dominant read: one post's thread, in order. Equality field first,
-// sort field second, the same principle as the SQL composite index.
+// Speeds up loading one post's comments in date order.
+// The filter field comes first and the sort field second.
 db.comments.createIndex(
   { postId: 1, createdAt: 1 },
   { name: 'idx_comments_post_created' }
 );
 
-// Subtree reads. The materialized path is only useful if a prefix match
-// is indexed; scoping by postId first keeps the scanned range small.
+// Speeds up reading a reply tree with a prefix match on path.
+// postId comes first so only one post's comments are scanned.
 db.comments.createIndex(
   { postId: 1, path: 1 },
   { name: 'idx_comments_post_path' }
 );
 
-// Direct children of a comment. Sparse: top-level comments have a null
-// parentId and do not belong in this index.
+// Speeds up finding the direct replies to a comment.
+// Sparse, so documents without a parentId field are left out.
 db.comments.createIndex(
   { parentId: 1 },
   { name: 'idx_comments_parent', sparse: true }
 );
 
-// "My comments", newest first.
+// Speeds up "comments by user", newest first.
 db.comments.createIndex(
   { authorId: 1, createdAt: -1 },
   { name: 'idx_comments_author_created' }
 );
 
-// Keyword search inside comment bodies. MongoDB permits only one text
-// index per collection, which is itself a point for the SQL-vs-NoSQL
-// comparison: PostgreSQL has no such restriction.
+// Speeds up keyword search in comment bodies.
+// MongoDB allows only one text index per collection. PostgreSQL has no such limit.
 db.comments.createIndex(
   { body: 'text' },
   { name: 'idx_comments_body_text', default_language: 'english' }
 );
 
-// Moderation queue. Partial, so the VISIBLE majority stays out of it.
+// Speeds up the moderation queue. Only HIDDEN and FLAGGED comments are indexed.
 db.comments.createIndex(
   { status: 1, createdAt: -1 },
   {
@@ -66,20 +61,20 @@ db.comments.createIndex(
 // reviews
 // ---------------------------------------------------------------------
 
-// Enforces one review per user per post, matching the SQL UNIQUE
-// constraint. Without this the document store would silently permit what
-// the relational store rejects, and the comparison would be unfair.
+// Allows only one review per user per post, the same rule as the SQL
+// UNIQUE constraint.
 db.reviews.createIndex(
   { postId: 1, reviewerId: 1 },
   { name: 'uq_reviews_post_reviewer', unique: true }
 );
 
-// Rating distribution and "highest rated first" per post.
+// Speeds up rating stats and "highest rated first" for a post.
 db.reviews.createIndex(
   { postId: 1, rating: -1 },
   { name: 'idx_reviews_post_rating' }
 );
 
+// Speeds up "reviews by user", newest first.
 db.reviews.createIndex(
   { reviewerId: 1, createdAt: -1 },
   { name: 'idx_reviews_reviewer_created' }
@@ -89,8 +84,8 @@ print('comments indexes: ' + db.comments.getIndexes().map(i => i.name).join(', '
 print('reviews indexes:  ' + db.reviews.getIndexes().map(i => i.name).join(', '));
 
 // =====================================================================
-// Baseline reset for Phase 4 benchmarking.
-// Uncomment to return both collections to the unindexed state (_id stays).
+// Remove the indexes above, for benchmarking without indexes.
+// Uncomment to run. The _id index always stays.
 // =====================================================================
 // db.comments.dropIndexes();
 // db.reviews.dropIndexes();

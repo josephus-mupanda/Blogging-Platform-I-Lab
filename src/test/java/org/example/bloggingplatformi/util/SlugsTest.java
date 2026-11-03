@@ -11,6 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/** Tests for Slugs, which turns titles into URL-safe slugs and keeps them unique. */
 class SlugsTest {
 
     @ParameterizedTest(name = "\"{0}\" -> \"{1}\"")
@@ -32,8 +33,7 @@ class SlugsTest {
     @Test
     @DisplayName("accents fold to their base letter rather than being dropped")
     void foldsAccents() {
-        // The NFD decomposition is what makes this work: dropping the
-        // combining mark alone leaves the base letter behind.
+        // NFD splits "é" into "e" plus an accent mark. The mark is removed and "e" stays.
         assertEquals("cafe-patterns", Slugs.forPost("Café Patterns"));
         assertEquals("uber-naive-resume", Slugs.forPost("Über naïve résumé"));
     }
@@ -41,8 +41,7 @@ class SlugsTest {
     @Test
     @DisplayName("text with no Latin equivalent falls back instead of returning empty")
     void fallsBackWhenNothingSurvives() {
-        // A slug is part of a UNIQUE constraint; an empty string would collide
-        // with every other unslugifiable title.
+        // Slugs must be unique, so an empty slug would clash with other titles like this one.
         assertEquals("post", Slugs.forPost("..."));
         assertEquals("post", Slugs.forPost("   "));
         assertEquals("post", Slugs.forPost(null));
@@ -89,8 +88,7 @@ class SlugsTest {
     void suffixDoesNotOverflowTheColumn() {
         String base = "a".repeat(Slugs.MAX_POST_SLUG_LENGTH);
 
-        // Every candidate is taken, so the method has to keep shortening the
-        // head to make room for the suffix rather than growing past the limit.
+        // The base is already at the limit, so the start must be cut to make room for the suffix.
         String slug = Slugs.uniquify(base, Slugs.MAX_POST_SLUG_LENGTH,
                 candidate -> candidate.equals(base) || candidate.endsWith("-2"));
 

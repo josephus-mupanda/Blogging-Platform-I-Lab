@@ -1,41 +1,30 @@
 package org.example.bloggingplatformi.cache;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 
 /**
- * A bounded least-recently-used cache.
+ * A fixed-size LRU (least recently used) cache.
  *
- * <p>Built on {@link LinkedHashMap} in <em>access order</em>. That one
- * constructor flag is what makes this an LRU rather than a FIFO: in access
- * order the map moves an entry to the back of its iteration order every time
- * it is read, so the entry at the front is always the one untouched for
- * longest. {@link LinkedHashMap#removeEldestEntry} is then called after each
- * insertion and evicts that front entry once the map is over capacity.
+ * How it works: a LinkedHashMap in access order moves an entry to the back
+ * each time it is read. So the front entry is the one unused for longest, and
+ * it is removed when the cache is full. get and put are O(1).
  *
- * <p><b>Complexity.</b> {@code get} and {@code put} are O(1): the hash map
- * gives constant-time location, and the intrusive doubly-linked list gives
- * constant-time reordering. Nothing here scans.
- *
- * <p><b>Thread safety.</b> Every method is synchronised on the instance.
- * {@code LinkedHashMap} is not thread-safe, and in access order even a
- * <em>read</em> mutates the list, so concurrent {@code get} calls would corrupt
- * it. A synchronised wrapper is not enough for the same reason.
- *
- * <p>Hit and miss counters are kept so Phase 4 can report a real hit rate
- * rather than assert that caching helped.
+ * Methods are synchronized because in access order even a read changes the
+ * map. It also counts hits and misses so we can report a hit rate.
  */
 public class LruCache<K, V> {
 
     private final int maxEntries;
     private final LinkedHashMap<K, V> entries;
 
-    private final AtomicLong hits = new AtomicLong();
-    private final AtomicLong misses = new AtomicLong();
-    private final AtomicLong evictions = new AtomicLong();
+    private long hits;
+    private long misses;
+    private long evictions;
 
     public LruCache(int maxEntries) {
         if (maxEntries < 1) {
@@ -43,15 +32,14 @@ public class LruCache<K, V> {
         }
         this.maxEntries = maxEntries;
 
-        // initialCapacity sized so the map does not rehash on its way to
-        // capacity; 0.75f is the default load factor; true selects access
-        // order, which is the whole point.
-        this.entries = new LinkedHashMap<>(Math.max(16, maxEntries * 4 / 3 + 1), 0.75f, true) {
+        // 16 and 0.75f are the default size and load factor. true turns on
+        // access order, which makes this an LRU.
+        this.entries = new LinkedHashMap<>(16, 0.75f, true) {
             @Override
             protected boolean removeEldestEntry(Map.Entry<K, V> eldest) {
                 boolean evict = size() > LruCache.this.maxEntries;
                 if (evict) {
-                    evictions.incrementAndGet();
+                    evictions++;
                 }
                 return evict;
             }
@@ -62,44 +50,37 @@ public class LruCache<K, V> {
     public synchronized Optional<V> get(K key) {
         V value = entries.get(key);
         if (value == null) {
-            misses.incrementAndGet();
+            misses++;
             return Optional.empty();
         }
-        hits.incrementAndGet();
+        hits++;
         return Optional.of(value);
     }
 
-    /** True if present, without disturbing the access order or the counters. */
+    /** True if the key is cached. Does not change the access order or the counters. */
     public synchronized boolean containsKey(K key) {
-        // containsKey does not promote the entry, which is what makes this
-        // safe to use in a test that is checking eviction order.
         return entries.containsKey(key);
     }
 
     public synchronized void put(K key, V value) {
         if (key == null || value == null) {
-            // A null value is indistinguishable from a miss on the way out, so
-            // storing one would turn every later lookup into a false miss.
+            // A stored null would look the same as a miss, so we skip it.
             return;
         }
         entries.put(key, value);
     }
 
     /**
-     * Returns the cached value, or computes and stores it on a miss.
-     *
-     * <p>The loader runs while the lock is held. For this application that is
-     * the right trade: the loader is a single indexed primary-key lookup, and
-     * allowing concurrent misses to each run it would turn a cache stampede
-     * into N identical queries.
+     * Returns the cached value, or loads and stores it on a miss.
+     * The loader runs inside the lock, so two threads never load the same key twice.
      */
     public synchronized V getOrLoad(K key, Function<K, V> loader) {
         V existing = entries.get(key);
         if (existing != null) {
-            hits.incrementAndGet();
+            hits++;
             return existing;
         }
-        misses.incrementAndGet();
+        misses++;
 
         V loaded = loader.apply(key);
         if (loaded != null) {
@@ -108,7 +89,7 @@ public class LruCache<K, V> {
         return loaded;
     }
 
-    /** Removes one entry. This is the invalidation hook every write path uses. */
+    /** Removes one entry. Called after every write so the cache is not stale. */
     public synchronized void invalidate(K key) {
         entries.remove(key);
     }
@@ -125,40 +106,39 @@ public class LruCache<K, V> {
         return maxEntries;
     }
 
-    public long hitCount() {
-        return hits.get();
+    public synchronized long hitCount() {
+        return hits;
     }
 
-    public long missCount() {
-        return misses.get();
+    public synchronized long missCount() {
+        return misses;
     }
 
-    public long evictionCount() {
-        return evictions.get();
+    public synchronized long evictionCount() {
+        return evictions;
     }
 
-    /** Hit rate in [0, 1]; 0 when nothing has been looked up yet. */
-    public double hitRate() {
-        long h = hits.get();
-        long total = h + misses.get();
-        return total == 0 ? 0.0 : (double) h / total;
+    /** Hit rate from 0 to 1. Returns 0 if nothing has been looked up yet. */
+    public synchronized double hitRate() {
+        long total = hits + misses;
+        return total == 0 ? 0.0 : (double) hits / total;
     }
 
-    /** Resets the counters without discarding the entries, for a clean benchmark run. */
-    public void resetStats() {
-        hits.set(0);
-        misses.set(0);
-        evictions.set(0);
+    /** Resets the counters but keeps the entries. Used before a benchmark run. */
+    public synchronized void resetStats() {
+        hits = 0;
+        misses = 0;
+        evictions = 0;
     }
 
-    /** Keys from least to most recently used. Exposed for tests and diagnostics. */
-    public synchronized java.util.List<K> keysInAccessOrder() {
-        return java.util.List.copyOf(entries.keySet());
+    /** Keys from least to most recently used. Used by tests. */
+    public synchronized List<K> keysInAccessOrder() {
+        return new ArrayList<>(entries.keySet());
     }
 
     @Override
     public synchronized String toString() {
         return String.format("LruCache[size=%d/%d, hits=%d, misses=%d, hitRate=%.1f%%, evictions=%d]",
-                entries.size(), maxEntries, hits.get(), misses.get(), hitRate() * 100, evictions.get());
+                entries.size(), maxEntries, hits, misses, hitRate() * 100, evictions);
     }
 }

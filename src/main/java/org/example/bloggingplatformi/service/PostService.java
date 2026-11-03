@@ -26,12 +26,9 @@ import org.example.bloggingplatformi.util.Excerpts;
 import org.example.bloggingplatformi.util.Slugs;
 
 /**
- * Business rules for posts: validation, slug and excerpt generation, tag
- * resolution and the publish/unpublish transitions.
- *
- * <p>The two denormalized columns are maintained here, which is what keeps
- * them from drifting: {@code excerpt} is regenerated on every body change, and
- * {@code view_count} is only ever moved by {@link #recordView}.
+ * Business rules for posts: validation, slugs, excerpts, tags, and
+ * publishing or unpublishing. The excerpt and view count columns are
+ * only changed from this class, so they stay correct.
  */
 public class PostService {
 
@@ -40,7 +37,7 @@ public class PostService {
     private final PostDao postDao;
     private final TagDao tagDao;
 
-    /** Null when engagement figures are not wanted, as in unit tests. */
+    /** These two are null in unit tests that do not need comment and review counts. */
     private final CommentDao commentDao;
     private final ReviewDao reviewDao;
 
@@ -83,16 +80,9 @@ public class PostService {
     }
 
     /**
-     * Fills in comment and review figures from whichever store holds them.
-     *
-     * <p>These used to come from subqueries in the post query, which always
-     * read PostgreSQL. With {@code app.comments.store=MONGO} the list then
-     * showed the relational table's counts while the detail screen showed
-     * MongoDB's - "8 comments" in the list, 141 on opening the post. Two
-     * batched lookups per page (not one per row) read the active store instead.
-     *
-     * <p>If that store is down the posts are still listed, with the figures
-     * marked unknown: the post list must not fail because MongoDB did.
+     * Adds comment counts and ratings to each post, read from the database
+     * that stores them. It does two lookups per page, not one per post.
+     * If that database is down, the posts are still shown with the numbers marked unknown.
      */
     private List<PostSummary> withEngagement(List<PostSummary> summaries) {
         if (summaries.isEmpty() || commentDao == null || reviewDao == null) {
@@ -127,7 +117,7 @@ public class PostService {
     /**
      * Creates a post and attaches its tags in one transaction.
      *
-     * @param tagNames free text; each is normalized and created if new
+     * @param tagNames tag names as typed; new tags are created
      */
     public Post create(long authorId, String title, String body,
                        PostStatus status, List<String> tagNames) {
@@ -135,9 +125,8 @@ public class PostService {
 
         PostStatus effective = (status == null) ? PostStatus.DRAFT : status;
 
-        // Generated once, at creation, and never regenerated: the slug is an
-        // immutable external identifier, so editing the title later must not
-        // break links that already point at the post.
+        // The slug is made once here and never changes, so old links keep working
+        // even if the title is edited.
         String slug = Slugs.uniquify(
                 Slugs.forPost(title), Slugs.MAX_POST_SLUG_LENGTH, postDao::existsBySlug);
 
@@ -148,8 +137,7 @@ public class PostService {
                 .body(body)
                 .excerpt(Excerpts.from(body))
                 .status(effective)
-                // The ck_posts_published_at constraint requires a date on a
-                // PUBLISHED row and rejects one on any other status.
+                // The database requires a published date only on PUBLISHED posts.
                 .publishedAt(effective == PostStatus.PUBLISHED ? OffsetDateTime.now() : null)
                 .build();
 
@@ -157,7 +145,7 @@ public class PostService {
         return post.withId(postId);
     }
 
-    /** Updates title, body, status and tags. The slug is left alone by design. */
+    /** Updates title, body, status and tags. The slug does not change. */
     public Post update(long postId, String title, String body,
                        PostStatus status, List<String> tagNames) {
         Post existing = require(postId);
@@ -168,8 +156,7 @@ public class PostService {
         Post updated = existing.toBuilder()
                 .title(title.strip())
                 .body(body)
-                // Regenerated on every body change, which is the mechanism
-                // that keeps this denormalization honest.
+                // Rebuild the excerpt so it always matches the body.
                 .excerpt(Excerpts.from(body))
                 .status(effective)
                 .publishedAt(resolvePublishedAt(existing, effective))
@@ -182,9 +169,8 @@ public class PostService {
     }
 
     /**
-     * Keeps {@code status} and {@code published_at} consistent with the CHECK
-     * constraint: publishing stamps a date if there is not one already,
-     * and leaving PUBLISHED clears it.
+     * A published post keeps its old date, or gets today's date if it has none.
+     * Any other status clears the date, as the database check requires.
      */
     private OffsetDateTime resolvePublishedAt(Post existing, PostStatus newStatus) {
         if (newStatus == PostStatus.PUBLISHED) {
@@ -210,24 +196,23 @@ public class PostService {
     }
 
     /**
-     * Deletes the post. Comments, reviews and tag links in PostgreSQL go with
-     * it through ON DELETE CASCADE.
-     *
-     * <p>When comments live in MongoDB there is no cross-store cascade, so
-     * {@link CommentService#deleteForPost} has to be called as well. That
-     * asymmetry is a genuine cost of polyglot persistence and is recorded in
-     * the Phase 4 comparison rather than hidden here.
+     * Deletes the post with its comments, reviews and tag links.
+     * Comments and reviews may be in MongoDB, where the PostgreSQL cascade does
+     * not reach, so they are deleted here first.
      */
     public boolean delete(long postId) {
+        if (commentDao != null) {
+            commentDao.deleteByPostId(postId);
+        }
+        if (reviewDao != null) {
+            reviewDao.deleteByPostId(postId);
+        }
         return postDao.deleteById(postId);
     }
 
     /**
-     * Records a read.
-     *
-     * <p>Delegates to {@code SET view_count = view_count + 1}: the
-     * read-modify-write happens inside the database, so two concurrent views
-     * cannot both read the same number and lose an increment.
+     * Adds one to the view count. The database does the addition itself,
+     * so two views at the same time are both counted.
      */
     public void recordView(long postId) {
         postDao.incrementViewCount(postId);
@@ -238,9 +223,8 @@ public class PostService {
         if (tagNames == null) {
             return null;
         }
-        // LinkedHashSet so the same tag typed twice collapses (the composite
-        // PK on post_tags would otherwise reject the second insert) while the
-        // author's ordering survives.
+        // A set drops a tag typed twice, which post_tags would reject.
+        // LinkedHashSet also keeps the order the author typed.
         Set<Integer> ids = new LinkedHashSet<>();
         for (String name : tagNames) {
             if (name != null && !name.isBlank()) {

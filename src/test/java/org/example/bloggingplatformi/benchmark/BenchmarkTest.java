@@ -12,13 +12,13 @@ import org.junit.jupiter.api.io.TempDir;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/** Tests for the Benchmark timer: warm-up, median, CSV output and the report table. */
 class BenchmarkTest {
 
     @Test
     @DisplayName("runs the warm-up and then the measured iterations")
     void runsWarmupThenIterations() {
-        // The warm-up exists so the measured runs are of compiled code, not of
-        // the interpreter. It must execute, and must not be counted.
+        // Warm-up runs give the JIT time to compile the code. They run but are not counted.
         AtomicInteger calls = new AtomicInteger();
 
         BenchmarkResult result = new Benchmark()
@@ -33,8 +33,7 @@ class BenchmarkTest {
     @Test
     @DisplayName("reports the median, not the mean, as the headline")
     void medianIgnoresOutliers() {
-        // One slow iteration, as a GC pause would produce. The mean absorbs it
-        // and reports an operation far slower than it is; the median does not.
+        // One slow run, like a GC pause. It pulls the mean up but not the median.
         AtomicInteger run = new AtomicInteger();
 
         BenchmarkResult result = new Benchmark()
@@ -133,8 +132,7 @@ class BenchmarkTest {
     @Test
     @DisplayName("the environment line records what the numbers depend on")
     void environmentIsRecorded() {
-        // A timing without the JVM, OS and core count cannot be compared with
-        // another machine's, and a report that omits them invites exactly that.
+        // Timings depend on the JVM, OS and CPU, so the report must record them.
         String environment = Benchmark.environment();
 
         assertTrue(environment.contains("JVM"));
@@ -155,7 +153,7 @@ class BenchmarkTest {
         assertTrue(lines[2].contains("display"));
     }
 
-    /** Spins for roughly the requested milliseconds; Thread.sleep is too coarse. */
+    /** Busy-waits for about the given milliseconds. Thread.sleep is not precise enough. */
     private static void busyWait(long millis) {
         long until = System.nanoTime() + millis * 1_000_000L;
         while (System.nanoTime() < until) {

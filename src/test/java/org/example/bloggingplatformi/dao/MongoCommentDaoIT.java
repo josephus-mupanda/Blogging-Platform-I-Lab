@@ -23,14 +23,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
- * Integration tests for the MongoDB DAOs.
- *
- * <p>Skips when mongod is unreachable, for the same reason
- * {@link PostgresDaoIT} does.
- *
- * <p>Every document written here uses a {@code postId} far above anything the
- * seed produces, so the tests cannot disturb the seeded data and can clean up
- * by deleting that one post id.
+ * Integration tests for the MongoDB comment and review DAOs. Skipped if MongoDB is not running.
+ * Test documents use a postId far above the seed data, so cleanup only deletes that one post id.
  */
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class MongoCommentDaoIT {
@@ -110,8 +104,7 @@ class MongoCommentDaoIT {
     @Test
     @DisplayName("a subtree read is one prefix match covering every level")
     void subtreeReturnsAllDescendants() {
-        // The relational equivalent recurses once per level; this is the
-        // advantage the materialized path buys.
+        // One prefix match on path returns all levels. SQL needs a recursive query for this.
         String rootId = comments.insert(Comment.newRoot(TEST_POST_ID, 2L, "ada_l", "Level 0."));
         Comment root = comments.findById(rootId).orElseThrow();
 
@@ -145,7 +138,7 @@ class MongoCommentDaoIT {
     @Test
     @DisplayName("a visible reply to a hidden comment keeps its place in the thread")
     void hiddenParentKeepsVisibleReply() {
-        // Mirrors the relational CTE, which filters on status after ordering.
+        // Same as the SQL version: sort the thread first, then drop hidden comments.
         String firstId = comments.insert(Comment.newRoot(TEST_POST_ID, 2L, "ada_l", "Hidden root."));
         Comment first = comments.findById(firstId).orElseThrow();
         comments.insert(Comment.newReply(first, 3L, "grace_h", "Visible reply."));
@@ -187,8 +180,7 @@ class MongoCommentDaoIT {
     @Test
     @DisplayName("editing a body records the previous text in the edit history")
     void editKeepsHistory() {
-        // There is no relational column for this; it is one of the open-ended
-        // fields that justifies the document model.
+        // The old text goes into editHistory, a field the SQL table does not have.
         String id = comments.insert(Comment.newRoot(TEST_POST_ID, 2L, "ada_l", "Original."));
 
         assertTrue(comments.updateBody(id, "Edited."));
@@ -198,9 +190,8 @@ class MongoCommentDaoIT {
     @Test
     @DisplayName("renaming an author rewrites every denormalized copy")
     void renameAuthorUpdatesCopies() {
-        // The cost of avoiding a cross-store join on every comment read.
-        // The author id must be outside the seeded user range (1..207): a
-        // rename is global, so a seeded id would rewrite real seed comments.
+        // Each comment stores a copy of the author name, so a rename must update all copies.
+        // A test author id is used, so real seed comments are not renamed.
         comments.insert(Comment.newRoot(TEST_POST_ID, TEST_AUTHOR_ID, "old_name", "One."));
         comments.insert(Comment.newRoot(TEST_POST_ID, TEST_AUTHOR_ID, "old_name", "Two."));
 
@@ -214,8 +205,7 @@ class MongoCommentDaoIT {
     @Test
     @DisplayName("an invalid id is treated as not found rather than throwing")
     void invalidIdIsNotFound() {
-        // A PostgreSQL-style numeric id reaching this DAO means the stores were
-        // mixed; a UI click should not surface an IllegalArgumentException.
+        // A number like "12345" is not a valid ObjectId. It should return empty, not throw.
         assertTrue(comments.findById("12345").isEmpty());
         assertTrue(comments.findById("not-an-object-id").isEmpty());
     }
@@ -245,8 +235,7 @@ class MongoCommentDaoIT {
     @Test
     @DisplayName("the average rating is empty for a post with no reviews")
     void averageIsEmptyWithoutReviews() {
-        // An empty aggregation produces no group document, the document-store
-        // equivalent of SQL's AVG-over-no-rows returning NULL.
+        // With no reviews the aggregation returns nothing, like AVG returning NULL in SQL.
         assertTrue(reviews.averageRating(TEST_POST_ID).isEmpty());
     }
 

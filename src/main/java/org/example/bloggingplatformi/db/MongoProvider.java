@@ -16,37 +16,26 @@ import org.example.bloggingplatformi.config.AppConfig;
 import org.example.bloggingplatformi.exception.DataAccessException;
 
 /**
- * Owns the single {@link MongoClient} for the application.
- *
- * <p>{@code MongoClient} is already a thread-safe, pooled object. Creating one
- * per operation is a well-worn mistake: each instance starts its own
- * connection pool and monitoring threads, so the "lightweight" document store
- * ends up slower than the relational one for reasons that have nothing to do
- * with either engine. One client, reused, is the supported pattern.
+ * Holds the one MongoClient used by the whole app. A MongoClient has its own
+ * connection pool and is thread-safe, so it is created once and reused.
  */
 public final class MongoProvider {
 
     public static final String COMMENTS = "comments";
     public static final String REVIEWS = "reviews";
 
-    private static volatile MongoClient client;
-    private static volatile String databaseName;
+    private static MongoClient client;
+    private static String databaseName;
 
     private MongoProvider() {
     }
 
-    public static MongoClient client() {
-        MongoClient local = client;
-        if (local == null) {
-            synchronized (MongoProvider.class) {
-                local = client;
-                if (local == null) {
-                    local = build();
-                    client = local;
-                }
-            }
+    // Creates the client the first time it is needed.
+    public static synchronized MongoClient client() {
+        if (client == null) {
+            client = build();
         }
-        return local;
+        return client;
     }
 
     private static MongoClient build() {
@@ -57,9 +46,7 @@ public final class MongoProvider {
         try {
             MongoClientSettings settings = MongoClientSettings.builder()
                     .applyConnectionString(new ConnectionString(uri))
-                    // Without a bound, an unreachable mongod leaves the caller
-                    // waiting 30 seconds before it reports anything. On the FX
-                    // thread that is indistinguishable from a freeze.
+                    // Give up after 5 seconds if MongoDB is down. The default is 30 seconds.
                     .applyToClusterSettings(b ->
                             b.serverSelectionTimeout(5, TimeUnit.SECONDS))
                     .applyToSocketSettings(b ->
@@ -90,10 +77,7 @@ public final class MongoProvider {
         return collection(REVIEWS);
     }
 
-    /**
-     * Round-trips a {@code ping} so a connection problem surfaces here, with a
-     * clear message, rather than inside an unrelated query later.
-     */
+    /** Sends a ping to check that MongoDB is up before we run real queries. */
     public static boolean isReachable() {
         try {
             database().runCommand(new Document("ping", 1));
@@ -103,7 +87,7 @@ public final class MongoProvider {
         }
     }
 
-    public static boolean isInitialised() {
+    public static synchronized boolean isInitialised() {
         return client != null;
     }
 

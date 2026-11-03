@@ -1,31 +1,27 @@
 -- =====================================================================
--- Smart Blogging Platform - Benchmark volume (PostgreSQL)
--- Phase 4
+-- Smart Blogging Platform: large dataset for benchmarks (PostgreSQL).
 --
--- Builds a dataset large enough that an index decision is visible in the
--- timings. The demo seed (508 posts) is index-immune: every table fits in a
--- few pages and the planner rightly seq-scans it whatever indexes exist.
+-- The demo seed is too small for indexes to matter, because PostgreSQL
+-- just scans small tables. This script makes enough rows to see the difference.
 --
--- Run against a SEPARATE, empty database, never the demo one:
+-- Run it on a separate, empty database, not the demo one:
 --   psql -U postgres -p 5433 -c "CREATE DATABASE blogging_platform_bench"
 --   psql -U postgres -p 5433 -d blogging_platform_bench -f db/postgres/V1__schema.sql
 --   psql -U postgres -p 5433 -d blogging_platform_bench -f db/bench/scale.sql
 --
--- V2__indexes.sql is deliberately NOT run here: the benchmark suite drops and
--- creates those indexes itself, so it can time every query both ways.
+-- Do not run V2__indexes.sql here. The benchmark suite creates and drops
+-- those indexes itself, so it can time each query with and without them.
 --
--- Volume (approximate): 5 000 users, 100 000 posts, 200 tags, 250 000 tag
--- links, 630 000 comments in threads three levels deep, 250 000 reviews.
--- Takes one to two minutes.
+-- Rough size: 5 000 users, 100 000 posts, 200 tags, 250 000 tag links,
+-- 630 000 comments (up to three levels deep), 250 000 reviews.
+-- It takes one to two minutes.
 --
--- Text is drawn from vocabularies rather than repeated, so a search has a
--- realistic selectivity: common words match a large share of rows, and the
--- synthetic rare terms (term0000-term1999 in posts, kw0000-kw4999 in
--- comments) match around a hundred each. A benchmark that only ever searches
--- for a word in every row measures nothing useful about an index.
+-- Text is built from word lists, so common words match many rows.
+-- Rare made-up words (term0000-term1999 in posts, kw0000-kw4999 in
+-- comments) match about a hundred rows each, which is a fair search test.
 --
--- Random picks reference the generating row (g, p.post_id) so PostgreSQL
--- re-evaluates them per row; see the note in V3__seed.sql.
+-- Random picks mention the outer row (g) so PostgreSQL picks again for
+-- each row. See the note in V3__seed.sql.
 -- =====================================================================
 
 BEGIN;
@@ -33,7 +29,7 @@ BEGIN;
 SELECT setseed(0.20261102);
 
 -- ---------------------------------------------------------------------
--- users
+-- users: 5 000 accounts. User 1 is the admin, every fifth is a reader.
 -- ---------------------------------------------------------------------
 INSERT INTO users (username, email, password_hash, display_name, role)
 SELECT 'bench_' || g,
@@ -44,14 +40,15 @@ SELECT 'bench_' || g,
 FROM generate_series(1, 5000) AS g;
 
 -- ---------------------------------------------------------------------
--- tags
+-- tags: topic-001 to topic-200.
 -- ---------------------------------------------------------------------
 INSERT INTO tags (name, slug)
 SELECT 'topic-' || lpad(g::text, 3, '0'), 'topic-' || lpad(g::text, 3, '0')
 FROM generate_series(1, 200) AS g;
 
 -- ---------------------------------------------------------------------
--- posts: 100 000 over four years, 80% published
+-- posts: 100 000 over four years, 80% published.
+-- The temp tables hold the word lists used to build titles and bodies.
 -- ---------------------------------------------------------------------
 CREATE TEMP TABLE vocab_title_verb  (w text[]);
 CREATE TEMP TABLE vocab_title_topic (w text[]);
@@ -125,14 +122,14 @@ FROM (
     FROM generate_series(1, 100000) AS g
 ) generated;
 
--- 1-4 tags per post.
+-- 1 to 4 tags per post. DISTINCT removes a tag picked twice for one post.
 INSERT INTO post_tags (post_id, tag_id)
 SELECT DISTINCT p.post_id, 1 + floor(random() * 200)::int
 FROM posts p
 CROSS JOIN LATERAL generate_series(1, 1 + (p.post_id % 4)::int) AS k;
 
 -- ---------------------------------------------------------------------
--- comments: 500 000 roots, 100 000 replies, 30 000 replies to replies
+-- comments: 500 000 top-level, 100 000 replies, 30 000 replies to replies.
 -- ---------------------------------------------------------------------
 INSERT INTO comments (post_id, author_id, parent_comment_id, body, status, created_at)
 SELECT 1 + floor(random() * 100000)::bigint,
@@ -152,8 +149,9 @@ SELECT 1 + floor(random() * 100000)::bigint,
        now() - (random() * INTERVAL '1400 days')
 FROM generate_series(1, 500000) AS g;
 
--- Replies are attached to a real parent on the same post, by joining on a
--- randomly chosen id rather than filtering with random() per scanned row.
+-- Replies: pick a random parent id (1 to 500 000) and join to that comment,
+-- so each reply is on the same post as its parent. A join is faster than
+-- ORDER BY random() over the whole table.
 INSERT INTO comments (post_id, author_id, parent_comment_id, body, created_at)
 SELECT parent.post_id,
        2 + floor(random() * 4999)::bigint,
@@ -169,6 +167,7 @@ FROM (SELECT g, 1 + floor(random() * 500000)::bigint AS pick
         FROM generate_series(1, 100000) AS g) picks
 JOIN comments parent ON parent.comment_id = picks.pick;
 
+-- Replies to replies: parents are picked from the reply ids (500 001 to 600 000).
 INSERT INTO comments (post_id, author_id, parent_comment_id, body, created_at)
 SELECT parent.post_id,
        2 + floor(random() * 4999)::bigint,
@@ -181,7 +180,7 @@ FROM (SELECT g, 500001 + floor(random() * 100000)::bigint AS pick
 JOIN comments parent ON parent.comment_id = picks.pick;
 
 -- ---------------------------------------------------------------------
--- reviews: 260 000 candidates, one per (post, reviewer)
+-- reviews: 260 000 tries. ON CONFLICT skips a duplicate (post, reviewer) pair.
 -- ---------------------------------------------------------------------
 INSERT INTO reviews (post_id, reviewer_id, rating, headline, body)
 SELECT 1 + floor(random() * 100000)::bigint,
@@ -195,6 +194,7 @@ ON CONFLICT ON CONSTRAINT uq_reviews_post_reviewer DO NOTHING;
 
 COMMIT;
 
+-- Update table statistics, then show the row count for each table.
 ANALYZE;
 
 SELECT 'users' AS table_name, COUNT(*) AS rows FROM users

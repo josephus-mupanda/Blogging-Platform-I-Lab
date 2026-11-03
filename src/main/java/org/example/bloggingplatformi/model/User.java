@@ -4,13 +4,8 @@ import java.time.OffsetDateTime;
 import java.util.Objects;
 
 /**
- * A row of {@code users}.
- *
- * <p>{@code userId} is {@code 0} for an instance that has not been inserted
- * yet; the database assigns the real value from the sequence.
- *
- * <p>{@code passwordHash} is carried because the DAO has to write it, but it
- * is excluded from {@link #toString()} so it cannot leak into a log line.
+ * A row of the users table. The id is 0 until the user is saved.
+ * toString() leaves out the password hash so it never ends up in a log.
  */
 public record User(
         long userId,
@@ -32,7 +27,7 @@ public record User(
         Objects.requireNonNull(role, "role");
     }
 
-    /** A new, not-yet-persisted user. */
+    /** A new user, not yet saved. */
     public static User newUser(String username, String email, String passwordHash,
                                String displayName, String bio, Role role) {
         return new User(0L, username, email, passwordHash, displayName, bio, role, true, null, null);
@@ -59,7 +54,7 @@ public record User(
 
     @Override
     public String toString() {
-        // passwordHash deliberately omitted.
+        // The password hash is left out.
         return "User[userId=" + userId
                 + ", username=" + username
                 + ", email=" + email

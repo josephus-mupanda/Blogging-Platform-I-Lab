@@ -33,13 +33,9 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Exercises the service rules against in-memory DAOs.
- *
- * <p>No database is involved, deliberately. These tests cover the logic the
- * service owns (slug generation, excerpt regeneration, the status/date
- * pairing, tag normalization), which is exactly the part that would otherwise
- * only be checked indirectly through a constraint violation. The DAO
- * implementations get their own integration tests.
+ * Tests the PostService rules using fake in-memory DAOs, with no database.
+ * Covers slugs, excerpts, publish dates, tag cleanup and validation.
+ * The real DAOs have their own integration tests.
  */
 class PostServiceTest {
 
@@ -91,7 +87,7 @@ class PostServiceTest {
     @Test
     @DisplayName("creating as DRAFT leaves the publication date null")
     void draftHasNoDate() {
-        // The same constraint rejects a non-published row that carries one.
+        // A draft has no publication date yet.
         Post post = service.create(1, "Not Yet", "Body.", PostStatus.DRAFT, List.of());
 
         assertNull(post.publishedAt());
@@ -107,7 +103,7 @@ class PostServiceTest {
     @Test
     @DisplayName("editing the body regenerates the excerpt")
     void updateRegeneratesExcerpt() {
-        // This is the mechanism that keeps the denormalized column from drifting.
+        // The excerpt is a copy of the body's start, so it must be rebuilt after an edit.
         Post created = service.create(1, "Title", "Original body text.",
                 PostStatus.DRAFT, List.of());
 
@@ -120,8 +116,7 @@ class PostServiceTest {
     @Test
     @DisplayName("editing the title does not change the slug")
     void updateKeepsSlug() {
-        // The slug is an immutable external identifier; changing it would
-        // break every link already pointing at the post.
+        // The slug is used in links, so changing it would break old links.
         Post created = service.create(1, "Original Title", "Body.",
                 PostStatus.DRAFT, List.of());
 
@@ -160,8 +155,7 @@ class PostServiceTest {
     @Test
     @DisplayName("tag names are normalized and deduplicated")
     void tagsAreNormalizedAndDeduplicated() {
-        // The composite PK on post_tags rejects the same tag twice on one post,
-        // so the duplicate has to collapse before the insert.
+        // post_tags does not allow the same tag twice on one post, so duplicates are removed first.
         service.create(1, "Tagged", "Body.", PostStatus.DRAFT,
                 List.of("Java", "java", "  JAVA  ", "PostgreSQL"));
 
@@ -211,8 +205,7 @@ class PostServiceTest {
     @Test
     @DisplayName("recording a view delegates to the atomic increment")
     void recordViewIncrements() {
-        // Done in SQL as view_count = view_count + 1, so two concurrent views
-        // cannot read the same value and lose an increment.
+        // The real DAO uses view_count = view_count + 1 in SQL, so two views at once both count.
         Post created = service.create(1, "Title", "Body.", PostStatus.DRAFT, List.of());
 
         service.recordView(created.postId());
@@ -374,8 +367,7 @@ class PostServiceTest {
 
         @Override
         public int findOrCreate(String name) {
-            // Mirrors the real DAO: names normalize to lower case, so the same
-            // tag in different casing resolves to one id.
+            // Like the real DAO: names are lower-cased, so "Java" and "java" get the same id.
             String normalized = name.strip().toLowerCase(Locale.ROOT);
             return created.computeIfAbsent(normalized, key -> ++sequence);
         }

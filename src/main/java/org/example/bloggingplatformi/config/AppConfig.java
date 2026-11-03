@@ -5,22 +5,9 @@ import java.io.InputStream;
 import java.util.Properties;
 
 /**
- * Centralised, read-only access to {@code application.properties}.
- *
- * <p>Values resolve in order of decreasing specificity:
- * <ol>
- *   <li>JVM system property &mdash; {@code -Ddb.postgres.password=secret}</li>
- *   <li>Environment variable &mdash; {@code DB_POSTGRES_PASSWORD}
- *       (upper-cased, dots replaced by underscores)</li>
- *   <li>The bundled {@code application.properties}</li>
- * </ol>
- *
- * <p>That ordering is what keeps credentials out of version control: the
- * file holds development defaults, and a real deployment overrides them
- * without a rebuild.
- *
- * <p>Loading happens once, in a holder class, so it is both lazy and
- * thread-safe without explicit synchronisation.
+ * Reads settings from application.properties. A JVM system property
+ * (-Ddb.postgres.password=x) wins first, then an environment variable
+ * (DB_POSTGRES_PASSWORD), then the file. This keeps real passwords out of git.
  */
 public final class AppConfig {
 
@@ -32,12 +19,14 @@ public final class AppConfig {
         this.properties = properties;
     }
 
-    private static final class Holder {
-        private static final AppConfig INSTANCE = load();
-    }
+    private static AppConfig instance;
 
-    public static AppConfig get() {
-        return Holder.INSTANCE;
+    /** Reads the file the first time, then returns the same object every time. */
+    public static synchronized AppConfig get() {
+        if (instance == null) {
+            instance = load();
+        }
+        return instance;
     }
 
     private static AppConfig load() {
@@ -56,8 +45,10 @@ public final class AppConfig {
     }
 
     /**
-     * @throws ConfigException if the key is absent everywhere. Failing loudly
-     *         at startup beats a {@code null} surfacing inside a JDBC URL.
+     * Returns a required setting.
+     *
+     * @throws ConfigException if the key is not set anywhere, so the app
+     *         fails early with a clear message
      */
     public String getString(String key) {
         String value = resolve(key);
@@ -85,19 +76,6 @@ public final class AppConfig {
         }
     }
 
-    public long getLong(String key, long defaultValue) {
-        String value = resolve(key);
-        if (value == null || value.isBlank()) {
-            return defaultValue;
-        }
-        try {
-            return Long.parseLong(value.trim());
-        } catch (NumberFormatException e) {
-            throw new ConfigException(
-                    "Configuration key '" + key + "' must be a long, was: " + value, e);
-        }
-    }
-
     public boolean getBoolean(String key, boolean defaultValue) {
         String value = resolve(key);
         return (value == null || value.isBlank())
@@ -117,12 +95,12 @@ public final class AppConfig {
         return properties.getProperty(key);
     }
 
-    /** {@code db.postgres.url} becomes {@code DB_POSTGRES_URL}. */
+    /** Turns a key into an environment variable name: db.postgres.url becomes DB_POSTGRES_URL. */
     static String toEnvKey(String key) {
         return key.replace('.', '_').replace('-', '_').toUpperCase();
     }
 
-    /** Thrown when configuration is missing or malformed. */
+    /** Thrown when a setting is missing or has the wrong format. */
     public static class ConfigException extends RuntimeException {
         public ConfigException(String message) {
             super(message);

@@ -1,20 +1,20 @@
 -- =====================================================================
--- Smart Blogging Platform - Physical Schema (PostgreSQL 14+)
--- Phase 1 / Epic 1 - User Stories 1.1 and 1.2
+-- Smart Blogging Platform: tables, constraints, triggers and one view
+-- (PostgreSQL 14+).
 --
 -- Run as:  psql -U postgres -d blogging_platform -f db/postgres/V1__schema.sql
 --
--- Indexes are intentionally NOT in this file. They live in V2__indexes.sql so
--- that Phase 4 can measure query performance with and without them.
+-- Indexes are kept in V2__indexes.sql, so queries can be timed with and
+-- without them.
 -- =====================================================================
 
 BEGIN;
 
 -- Extensions -----------------------------------------------------------
--- pg_trgm powers the trigram GIN index used for ILIKE '%term%' search.
+-- pg_trgm is needed for the trigram index that speeds up ILIKE '%term%'.
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
--- Clean re-runnable drop, children first ------------------------------
+-- Drop old objects so the script can be run again. Children go first.
 DROP TABLE IF EXISTS reviews    CASCADE;
 DROP TABLE IF EXISTS comments   CASCADE;
 DROP TABLE IF EXISTS post_tags  CASCADE;
@@ -24,7 +24,8 @@ DROP TABLE IF EXISTS users      CASCADE;
 DROP FUNCTION IF EXISTS set_updated_at() CASCADE;
 
 -- ---------------------------------------------------------------------
--- Shared trigger function: keeps updated_at honest regardless of client
+-- Trigger function: sets updated_at on every UPDATE, whatever the
+-- client sends.
 -- ---------------------------------------------------------------------
 CREATE FUNCTION set_updated_at() RETURNS TRIGGER AS $$
 BEGIN
@@ -34,7 +35,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- ---------------------------------------------------------------------
--- users
+-- users: accounts for admins, authors and readers.
 -- ---------------------------------------------------------------------
 CREATE TABLE users (
     user_id       BIGSERIAL,
@@ -64,7 +65,7 @@ CREATE TRIGGER trg_users_updated_at
     FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 -- ---------------------------------------------------------------------
--- posts
+-- posts: blog posts written by a user.
 -- ---------------------------------------------------------------------
 CREATE TABLE posts (
     post_id      BIGSERIAL,
@@ -87,7 +88,7 @@ CREATE TABLE posts (
     CONSTRAINT ck_posts_body   CHECK (char_length(trim(body)) > 0),
     CONSTRAINT ck_posts_status CHECK (status IN ('DRAFT', 'PUBLISHED', 'ARCHIVED')),
     CONSTRAINT ck_posts_views  CHECK (view_count >= 0),
-    -- A published post must carry a publication date; a draft must not.
+    -- A published post must have a published_at date.
     CONSTRAINT ck_posts_published_at CHECK (
         (status = 'PUBLISHED' AND published_at IS NOT NULL)
      OR (status <> 'PUBLISHED')
@@ -103,7 +104,7 @@ CREATE TRIGGER trg_posts_updated_at
     FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 -- ---------------------------------------------------------------------
--- tags
+-- tags: labels that can be attached to posts.
 -- ---------------------------------------------------------------------
 CREATE TABLE tags (
     tag_id     SERIAL,
@@ -114,7 +115,7 @@ CREATE TABLE tags (
     CONSTRAINT pk_tags       PRIMARY KEY (tag_id),
     CONSTRAINT uq_tags_name  UNIQUE (name),
     CONSTRAINT uq_tags_slug  UNIQUE (slug),
-    -- Stored lower-case so that uniqueness is genuinely case-insensitive.
+    -- Names are stored in lower case, so "Java" and "java" count as the same tag.
     CONSTRAINT ck_tags_lower CHECK (name = lower(name)),
     CONSTRAINT ck_tags_blank CHECK (char_length(trim(name)) > 0)
 );
@@ -122,7 +123,7 @@ CREATE TABLE tags (
 COMMENT ON TABLE tags IS 'Controlled vocabulary; names are normalized to lower case.';
 
 -- ---------------------------------------------------------------------
--- post_tags (associative entity resolving the M:N relationship)
+-- post_tags: join table for the many-to-many link between posts and tags.
 -- ---------------------------------------------------------------------
 CREATE TABLE post_tags (
     post_id   BIGINT      NOT NULL,
@@ -139,7 +140,8 @@ CREATE TABLE post_tags (
 COMMENT ON TABLE post_tags IS 'The composite PK also prevents the same tag twice on one post.';
 
 -- ---------------------------------------------------------------------
--- comments (relational form; mirrored as documents in MongoDB)
+-- comments: replies on a post. A comment can reply to another comment.
+-- The same data is also stored as documents in MongoDB.
 -- ---------------------------------------------------------------------
 CREATE TABLE comments (
     comment_id        BIGSERIAL,
@@ -154,8 +156,8 @@ CREATE TABLE comments (
     CONSTRAINT pk_comments         PRIMARY KEY (comment_id),
     CONSTRAINT fk_comments_post    FOREIGN KEY (post_id)
         REFERENCES posts (post_id) ON DELETE CASCADE,
-    -- SET NULL, not CASCADE: deleting an account must not erase a thread
-    -- other people replied to.
+    -- SET NULL instead of CASCADE, so deleting a user keeps the replies
+    -- other people wrote under their comments.
     CONSTRAINT fk_comments_author  FOREIGN KEY (author_id)
         REFERENCES users (user_id) ON DELETE SET NULL,
     CONSTRAINT fk_comments_parent  FOREIGN KEY (parent_comment_id)
@@ -172,7 +174,7 @@ CREATE TRIGGER trg_comments_updated_at
     FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 -- ---------------------------------------------------------------------
--- reviews
+-- reviews: a 1 to 5 star rating of a post by a user.
 -- ---------------------------------------------------------------------
 CREATE TABLE reviews (
     review_id   BIGSERIAL,
@@ -199,7 +201,8 @@ CREATE TRIGGER trg_reviews_updated_at
     FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 -- ---------------------------------------------------------------------
--- Convenience view: post list rows without dragging full bodies around.
+-- v_post_summary: one row per post for list screens, with author,
+-- comment count and average rating. It leaves out the full body.
 -- ---------------------------------------------------------------------
 CREATE OR REPLACE VIEW v_post_summary AS
 SELECT p.post_id,

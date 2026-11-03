@@ -16,15 +16,9 @@ import org.example.bloggingplatformi.model.Comment;
 import org.example.bloggingplatformi.model.CommentStatus;
 
 /**
- * PostgreSQL implementation of {@link CommentDao}, using an adjacency list
- * ({@code parent_comment_id}) and recursive CTEs to walk it.
- *
- * <p>The {@code path} and {@code depth} that {@link Comment} carries are not
- * stored here; they are computed inside the recursive query. That is the
- * structural difference from {@link MongoCommentDao}, which stores a
- * materialized path and reads a subtree with one indexed prefix match: the
- * relational side pays per level of recursion at read time, the document side
- * pays at write time by maintaining the path.
+ * CommentDao for PostgreSQL. Each comment stores its parent_comment_id,
+ * and recursive queries (WITH RECURSIVE) walk the reply tree.
+ * Depth is worked out in the query, not stored like in MongoCommentDao.
  */
 public class JdbcCommentDao implements CommentDao {
 
@@ -62,9 +56,8 @@ public class JdbcCommentDao implements CommentDao {
 
     @Override
     public List<Comment> findByPostId(long postId, boolean includeHidden) {
-        // The recursive CTE computes depth and a sortable path in one pass.
-        // Ordering by the array of ancestor ids is what puts every reply
-        // directly beneath its parent rather than merely in date order.
+        // The recursive query works out each comment's depth and a sort path.
+        // Sorting by sort_path puts each reply right under its parent.
         String sql = """
                 WITH RECURSIVE thread AS (
                     SELECT c.comment_id, c.post_id, c.author_id, c.parent_comment_id,
@@ -169,10 +162,8 @@ public class JdbcCommentDao implements CommentDao {
         if (keyword == null || keyword.isBlank()) {
             return List.of();
         }
-        // ILIKE with a leading wildcard, which only a trigram index can serve:
-        // idx_comments_body_trgm. Unlike MongoDB's text index it matches
-        // substrings, not just whole stemmed words, at the price of a larger
-        // index. Without it this was a 630 000-row scan (1.6 s in Phase 4).
+        // ILIKE '%word%' can only use a trigram index (idx_comments_body_trgm).
+        // Without it, every comment row would be scanned.
         return Database.withConnection(connection -> {
             try (PreparedStatement ps = connection.prepareStatement(
                     SELECT_BASE + " WHERE c.body ILIKE ? ORDER BY c.created_at DESC LIMIT ?")) {
@@ -219,8 +210,7 @@ public class JdbcCommentDao implements CommentDao {
         if (postIds.isEmpty()) {
             return Map.of();
         }
-        // = ANY(array) binds the whole id list as one parameter, so the
-        // statement text is the same whatever the page size.
+        // ANY(?) takes the whole list of ids as one array parameter.
         String sql = """
                 SELECT post_id, COUNT(*)
                   FROM comments
@@ -319,9 +309,8 @@ public class JdbcCommentDao implements CommentDao {
         if (id == null) {
             return 0;
         }
-        // Counting the subtree first, then deleting the root, so the return
-        // value matches MongoCommentDao's. The replies themselves are removed
-        // by ON DELETE CASCADE on fk_comments_parent, not by this statement.
+        // Count the comment and its replies first, so we return the same number
+        // as MongoCommentDao. Deleting the root removes the replies by ON DELETE CASCADE.
         return Database.inTransaction(connection -> {
             long affected = 0;
             String countSql = """
@@ -364,13 +353,11 @@ public class JdbcCommentDao implements CommentDao {
 
     @Override
     public long renameAuthor(long authorId, String newDisplayName) {
-        // Nothing to do: the relational model stores the name once, in users,
-        // and every read reaches it by join. This is the cost the document
-        // store pays for avoiding that join.
+        // Nothing to do. The name is only stored in users and read with a join.
         return 0;
     }
 
-    /** Parses the string id back to the BIGINT the schema uses. */
+    /** Turns the String id into a Long, or null if it is not a number. */
     private static Long parseId(String commentId) {
         if (commentId == null || commentId.isBlank()) {
             return null;
@@ -378,9 +365,7 @@ public class JdbcCommentDao implements CommentDao {
         try {
             return Long.parseLong(commentId.strip());
         } catch (NumberFormatException e) {
-            // A Mongo ObjectId reaching this DAO means the two stores were
-            // mixed; treating it as "not found" beats a NumberFormatException
-            // surfacing from a UI click.
+            // For example a MongoDB id. Treat it as "not found" instead of crashing.
             return null;
         }
     }
@@ -395,7 +380,7 @@ public class JdbcCommentDao implements CommentDao {
         }
     }
 
-    /** For the recursive queries, which carry a computed depth column. */
+    /** Like mapAll, but reads depth from the recursive query's depth column. */
     private List<Comment> mapThread(PreparedStatement ps) throws SQLException {
         try (ResultSet rs = ps.executeQuery()) {
             List<Comment> comments = new ArrayList<>();

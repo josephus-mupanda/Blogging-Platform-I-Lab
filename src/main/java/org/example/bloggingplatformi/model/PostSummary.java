@@ -4,17 +4,9 @@ import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 
 /**
- * One row of a post listing: everything the list screen shows, and nothing it
- * does not.
- *
- * <p>The post columns come from PostgreSQL; the comment and review figures are
- * filled in by {@code PostService} from whichever store holds comments and
- * reviews, and are {@link #UNKNOWN} when that store cannot be reached.
- *
- * <p>Deliberately excludes {@code posts.body}. Pulling full article text for
- * every row of a twenty-row page is the single easiest way to make a listing
- * slow, and the precomputed {@code excerpt} exists exactly so it is not needed.
- * The full {@link Post} is loaded only when one is opened.
+ * One row of the post list, with only the fields the list shows.
+ * It leaves out the post body to keep the list fast. The excerpt is shown instead.
+ * PostService fills in the comment and review numbers later.
  */
 public record PostSummary(
         long postId,
@@ -34,17 +26,14 @@ public record PostSummary(
 ) {
 
     /**
-     * Marks a comment or review count that could not be read, because the
-     * store holding comments and reviews was unreachable. Shown as a dash:
-     * zero would be a claim, and a wrong one.
+     * Used when the comment or review count could not be read because that
+     * database was down. The UI shows a dash, because zero would be wrong.
      */
     public static final long UNKNOWN = -1;
 
     /**
-     * Copy with the engagement figures from the comment and review store.
-     *
-     * <p>Those figures live wherever {@code app.comments.store} points, which
-     * is not necessarily PostgreSQL, so the post query cannot compute them.
+     * Returns a copy with the comment count and rating filled in. These can come
+     * from MongoDB, so the PostgreSQL post query cannot work them out itself.
      */
     public PostSummary withEngagement(long comments, RatingStats ratings) {
         return new PostSummary(postId, title, slug, excerpt, status, viewCount, publishedAt,
@@ -62,7 +51,7 @@ public record PostSummary(
         return commentCount != UNKNOWN;
     }
 
-    /** Null when the post has no reviews yet; the UI shows a dash. */
+    /** False when the post has no reviews yet. The UI then shows a dash. */
     public boolean hasRating() {
         return averageRating != null;
     }

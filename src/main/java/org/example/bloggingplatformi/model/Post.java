@@ -4,16 +4,9 @@ import java.time.OffsetDateTime;
 import java.util.Objects;
 
 /**
- * A row of {@code posts}.
- *
- * <p>Eleven components is past the point where a positional constructor is
- * readable at the call site, so {@link Builder} exists for construction while
- * the record itself stays immutable.
- *
- * <p>The {@code status}/{@code publishedAt} pairing mirrors the
- * {@code ck_posts_published_at} constraint: PUBLISHED requires a date, and the
- * other two states must not carry one. {@link #publish} and {@link #unpublish}
- * are the supported ways to move between them.
+ * A row of the posts table. It has eleven fields, so a Builder is used to create it.
+ * A PUBLISHED post must have a published date and other posts must not.
+ * Use publish() and unpublish() to change between them.
  */
 public record Post(
         long postId,
@@ -47,7 +40,7 @@ public record Post(
         return toBuilder().postId(id).build();
     }
 
-    /** Moves the post to PUBLISHED, stamping the publication date the constraint requires. */
+    /** Sets the post to PUBLISHED and gives it a published date. */
     public Post publish(OffsetDateTime when) {
         return toBuilder()
                 .status(PostStatus.PUBLISHED)
@@ -56,8 +49,8 @@ public record Post(
     }
 
     /**
-     * Returns the post to DRAFT and clears {@code publishedAt}, because the
-     * database rejects a publication date on an unpublished row.
+     * Sets the post back to DRAFT and clears the published date,
+     * because the database does not allow a date on an unpublished post.
      */
     public Post unpublish() {
         return toBuilder()
@@ -85,7 +78,7 @@ public record Post(
         return new Builder();
     }
 
-    /** Mutable builder for an immutable record. */
+    /** Collects the fields one at a time, then builds the Post. */
     public static final class Builder {
         private long postId;
         private long authorId;

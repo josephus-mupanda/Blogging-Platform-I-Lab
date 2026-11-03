@@ -5,21 +5,9 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * A comment, in the one shape both stores can produce.
- *
- * <p>The identifier is a {@code String}, not a {@code long}. PostgreSQL issues
- * a {@code BIGSERIAL} and MongoDB issues an {@code ObjectId}, and the whole
- * point of the dual implementation is that the layers above cannot tell which
- * one they are talking to. A string is the only type both can honestly supply.
- * The JDBC DAO renders its {@code comment_id} as decimal digits; the Mongo DAO
- * uses the 24-character hex form.
- *
- * <p>{@code path} and {@code depth} come from the MongoDB materialized-path
- * design. The JDBC implementation derives both in its recursive CTE, so a
- * thread loaded from either store nests identically in the UI.
- *
- * <p>{@code reactions} has no relational column. It is the open-ended field
- * that justifies the document store, and the JDBC DAO returns it empty.
+ * A comment on a post, in a form that both PostgreSQL and MongoDB can fill.
+ * The id is a String because PostgreSQL gives a number and MongoDB gives an ObjectId.
+ * Only MongoDB stores reactions, so they are empty when read from PostgreSQL.
  */
 public record Comment(
         String commentId,
@@ -36,7 +24,7 @@ public record Comment(
         OffsetDateTime updatedAt
 ) {
 
-    /** Path separator and root value, matching the Mongo seed data. */
+    /** The path of a top-level comment. It is also the separator between ids in a path. */
     public static final String ROOT_PATH = "/";
 
     public Comment {
@@ -51,15 +39,15 @@ public record Comment(
         }
     }
 
-    /** A new top-level comment, not yet persisted. */
+    /** A new top-level comment, not yet saved. */
     public static Comment newRoot(long postId, Long authorId, String authorName, String body) {
         return new Comment(null, postId, authorId, authorName, null, ROOT_PATH, 0,
                 body, CommentStatus.VISIBLE, Map.of(), null, null);
     }
 
     /**
-     * A new reply. The path and depth are taken from the parent, which is how
-     * a subtree stays reachable by a single indexed prefix match.
+     * A new reply. Its path is the parent's path plus the parent's id,
+     * so all replies under a comment can be found by searching for that path prefix.
      */
     public static Comment newReply(Comment parent, Long authorId, String authorName, String body) {
         Objects.requireNonNull(parent, "parent");
@@ -79,7 +67,7 @@ public record Comment(
         return parentId == null;
     }
 
-    /** True when the author account was deleted; the thread survives, the name does not. */
+    /** True when the author's account was deleted. The comment stays, but without a name. */
     public boolean isOrphaned() {
         return authorId == null;
     }

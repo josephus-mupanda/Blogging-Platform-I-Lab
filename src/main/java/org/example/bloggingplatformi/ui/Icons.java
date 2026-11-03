@@ -5,15 +5,8 @@ import javafx.scene.paint.Color;
 import javafx.scene.shape.SVGPath;
 
 /**
- * Vector icons as inline SVG paths.
- *
- * <p>Drawn rather than loaded from an icon font, for two reasons: a font has
- * to ship with the application and be registered before first use, and a glyph
- * that is missing renders as a box rather than failing loudly. An
- * {@link SVGPath} is resolution-independent and always available.
- *
- * <p>All paths are on a 24x24 grid and are scaled to the requested size, so
- * icons line up optically regardless of where they are used.
+ * Icons drawn from SVG paths, so no icon font is needed.
+ * All paths are drawn on a 24x24 grid and scaled to the size asked for.
  */
 public final class Icons {
 
@@ -85,11 +78,8 @@ public final class Icons {
     }
 
     /**
-     * An icon at {@code size} pixels in an explicit colour.
-     *
-     * <p>Wrapped in a {@link Group} so the scaled bounds are reported
-     * correctly; scaling an {@code SVGPath} directly leaves the layout engine
-     * reserving space for the original 24x24 geometry.
+     * An icon at {@code size} pixels in the given colour.
+     * It is wrapped in a Group so the layout uses the scaled size, not the original 24x24.
      */
     public static Group of(String path, double size, Color fill) {
         SVGPath svg = new SVGPath();

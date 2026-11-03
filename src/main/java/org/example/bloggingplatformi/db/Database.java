@@ -12,49 +12,37 @@ import org.example.bloggingplatformi.config.AppConfig;
 import org.example.bloggingplatformi.exception.DataAccessException;
 
 /**
- * Owns the PostgreSQL connection pool and the two ways to borrow from it.
- *
- * <p>A pool is not a premature optimisation here. Establishing a PostgreSQL
- * connection costs single-digit milliseconds including the TLS and
- * authentication handshake, which is more than most of the queries in this
- * application take to run. Opening one per query would mean the Phase 4
- * benchmarks measured connection setup rather than query execution, and every
- * indexing result would be buried in that noise.
- *
- * <p>Use {@link #withConnection} for a single statement and
- * {@link #inTransaction} when several writes must succeed or fail together.
+ * Holds the PostgreSQL connection pool. Opening a new connection takes longer
+ * than most of our queries, so connections are reused.
+ * Use withConnection for one statement, and inTransaction when several
+ * writes must all succeed or all fail.
  */
 public final class Database {
 
-    private static volatile HikariDataSource dataSource;
+    private static HikariDataSource dataSource;
 
     private Database() {
     }
 
-    /** A unit of work that borrows a connection and returns a result. */
+    /** Database work that uses a connection and returns a result. */
     @FunctionalInterface
     public interface ConnectionFunction<T> {
         T apply(Connection connection) throws SQLException;
     }
 
-    /** A unit of work that borrows a connection and returns nothing. */
+    /** Database work that uses a connection and returns nothing. */
     @FunctionalInterface
     public interface ConnectionConsumer {
         void accept(Connection connection) throws SQLException;
     }
 
-    public static DataSource dataSource() {
-        HikariDataSource local = dataSource;
-        if (local == null) {
-            synchronized (Database.class) {
-                local = dataSource;
-                if (local == null) {
-                    local = build();
-                    dataSource = local;
-                }
-            }
+    // Creates the pool the first time it is needed. synchronized means two
+    // threads can never both create a pool.
+    public static synchronized DataSource dataSource() {
+        if (dataSource == null) {
+            dataSource = build();
         }
-        return local;
+        return dataSource;
     }
 
     private static HikariDataSource build() {
@@ -66,19 +54,8 @@ public final class Database {
         hikari.setPassword(config.getString("db.postgres.password"));
         hikari.setDriverClassName("org.postgresql.Driver");
 
+        // At most this many connections are open at the same time.
         hikari.setMaximumPoolSize(config.getInt("db.postgres.pool.maxSize", 10));
-        hikari.setMinimumIdle(config.getInt("db.postgres.pool.minIdle", 2));
-        hikari.setConnectionTimeout(config.getLong("db.postgres.pool.connectionTimeoutMs", 10_000));
-        hikari.setIdleTimeout(config.getLong("db.postgres.pool.idleTimeoutMs", 600_000));
-        hikari.setMaxLifetime(config.getLong("db.postgres.pool.maxLifetimeMs", 1_800_000));
-        hikari.setPoolName("blogging-platform-pool");
-
-        // Server-side prepared statements. PostgreSQL caches the plan after a
-        // statement has been executed a few times, which is most of the point
-        // of using PreparedStatement in a loop.
-        hikari.addDataSourceProperty("cachePrepStmts", "true");
-        hikari.addDataSourceProperty("prepStmtCacheSize", "250");
-        hikari.addDataSourceProperty("prepStmtCacheSqlLimit", "2048");
 
         try {
             return new HikariDataSource(hikari);
@@ -91,8 +68,8 @@ public final class Database {
     }
 
     /**
-     * Borrows a connection in auto-commit mode, runs the work and returns it.
-     * The connection goes back to the pool whatever happens.
+     * Takes a connection from the pool, runs the work and returns the result.
+     * The connection always goes back to the pool, even after an error.
      */
     public static <T> T withConnection(ConnectionFunction<T> work) {
         try (Connection connection = dataSource().getConnection()) {
@@ -110,12 +87,8 @@ public final class Database {
     }
 
     /**
-     * Runs the work inside a single transaction: commits on a clean return,
-     * rolls back on any exception.
-     *
-     * <p>The rollback is in a nested try so that a failure while rolling back
-     * cannot replace the exception that caused it. Losing the original cause
-     * is how a one-line bug turns into an afternoon.
+     * Runs the work in one transaction. It commits if the work finishes and rolls back on any exception.
+     * If the rollback also fails, the first exception is still the one thrown.
      */
     public static <T> T inTransaction(ConnectionFunction<T> work) {
         Connection connection = null;
@@ -128,20 +101,19 @@ public final class Database {
             connection.commit();
             return result;
         } catch (SQLException e) {
-            rollbackQuietly(connection, e);
+            rollback(connection);
             throw translate(e);
         } catch (RuntimeException e) {
-            rollbackQuietly(connection, e);
+            rollback(connection);
             throw e;
         } finally {
             if (connection != null) {
                 try {
-                    // Restore the pooled connection to the state the next
-                    // borrower expects.
+                    // Turn auto-commit back on before the connection goes back to the pool.
                     connection.setAutoCommit(true);
                     connection.close();
                 } catch (SQLException ignored) {
-                    // Nothing useful to do; the pool evicts a broken connection.
+                    // Nothing to do here. The pool throws away a broken connection.
                 }
             }
         }
@@ -154,14 +126,14 @@ public final class Database {
         });
     }
 
-    private static void rollbackQuietly(Connection connection, Exception primary) {
+    private static void rollback(Connection connection) {
         if (connection == null) {
             return;
         }
         try {
             connection.rollback();
-        } catch (SQLException rollbackFailure) {
-            primary.addSuppressed(rollbackFailure);
+        } catch (SQLException ignored) {
+            // The original error is the one worth showing, so this one is ignored.
         }
     }
 
@@ -170,12 +142,12 @@ public final class Database {
                 "Database operation failed [SQLSTATE " + e.getSQLState() + "]: " + e.getMessage(), e);
     }
 
-    /** True once the pool has been created; used by tests to avoid building one. */
-    public static boolean isInitialised() {
+    /** True once the pool has been created. Tests use it to avoid creating one. */
+    public static synchronized boolean isInitialised() {
         return dataSource != null;
     }
 
-    /** Closes the pool. Called from the JavaFX {@code stop()} hook in Phase 3. */
+    /** Closes the pool. Called when the JavaFX app stops. */
     public static synchronized void shutdown() {
         if (dataSource != null && !dataSource.isClosed()) {
             dataSource.close();

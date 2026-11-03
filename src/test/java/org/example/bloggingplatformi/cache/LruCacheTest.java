@@ -15,6 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/** Tests for LruCache: eviction order, hit and miss counts, nulls and thread safety. */
 class LruCacheTest {
 
     @Test
@@ -50,8 +51,8 @@ class LruCacheTest {
     @Test
     @DisplayName("reading an entry promotes it, so it survives the next eviction")
     void readPromotesEntry() {
-        // This is the difference between an LRU and a FIFO, and it is entirely
-        // down to the access-order flag on the backing LinkedHashMap.
+        // This is what makes it LRU and not FIFO. It comes from the
+        // access-order flag on the LinkedHashMap.
         LruCache<Integer, String> cache = new LruCache<>(3);
         cache.put(1, "one");
         cache.put(2, "two");
@@ -79,7 +80,7 @@ class LruCacheTest {
     @Test
     @DisplayName("containsKey does not disturb the access order")
     void containsKeyDoesNotPromote() {
-        // If it did, a test asserting eviction order would be measuring itself.
+        // Checking for a key should not count as using it.
         LruCache<Integer, String> cache = new LruCache<>(5);
         cache.put(1, "one");
         cache.put(2, "two");
@@ -107,7 +108,7 @@ class LruCacheTest {
     @Test
     @DisplayName("the hit rate is zero before anything is looked up")
     void hitRateWithoutLookups() {
-        // Not NaN: 0/0 would propagate into the performance report as "NaN%".
+        // 0/0 would give NaN, so the cache returns 0 instead.
         assertEquals(0.0, new LruCache<String, String>(10).hitRate(), 0.0);
     }
 
@@ -158,8 +159,7 @@ class LruCacheTest {
         cache.put(null, "value");
         cache.put("key", null);
 
-        // A stored null would be indistinguishable from a miss on the way out,
-        // turning every later lookup of that key into a false miss.
+        // A stored null would look the same as a miss, so nulls are not stored.
         assertEquals(0, cache.size());
     }
 
@@ -185,8 +185,8 @@ class LruCacheTest {
     @Test
     @DisplayName("concurrent access does not corrupt the cache or lose entries")
     void survivesConcurrentAccess() throws Exception {
-        // In access order even a get() mutates the linked list, so an
-        // unsynchronised LinkedHashMap would corrupt here, not merely race.
+        // In access order even get() changes the linked list, so the cache
+        // must be synchronized or it breaks under many threads.
         LruCache<Integer, String> cache = new LruCache<>(100);
         int threads = 8;
         int operationsPerThread = 2_000;

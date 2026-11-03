@@ -19,21 +19,12 @@ import org.example.bloggingplatformi.db.Database;
 import org.example.bloggingplatformi.db.MongoProvider;
 
 /**
- * Copies the benchmark comments and reviews from PostgreSQL into MongoDB.
+ * Copies the benchmark comments and reviews from PostgreSQL into MongoDB, so
+ * both databases are tested on the same data.
  *
- * <p>The SQL vs NoSQL comparison is only meaningful on identical data. Seeding
- * each store separately would give two datasets of the same size but different
- * shape - different thread depths, different hot posts - and any timing gap
- * could then be the data rather than the engine. Copying row for row removes
- * that variable.
- *
- * <p>Each document keeps its relational id as {@code sqlId}, so a benchmark can
- * address the very same comment in both stores. The application never reads
- * that field; the {@code $jsonSchema} validator allows additional fields.
- *
- * <p>Comments are streamed in id order, which guarantees a parent is copied
- * before its replies, so each reply's materialized path can be built from its
- * parent's: {@code parent.path + parent._id + "/"}.
+ * Each document keeps its PostgreSQL id as sqlId, so a benchmark can find the
+ * same comment in both. Comments are read in id order, so a parent is always
+ * copied before its replies and a reply's path can be built from its parent's.
  */
 final class MongoBenchLoader {
 
@@ -77,7 +68,7 @@ final class MongoBenchLoader {
         });
     }
 
-    /** Where a copied comment sits in its thread, kept so replies can extend it. */
+    /** Where a copied comment sits in its thread. Its replies build on this. */
     private record Placed(ObjectId id, String path, int depth) {
     }
 
@@ -166,9 +157,8 @@ final class MongoBenchLoader {
         if (batch.isEmpty()) {
             return 0;
         }
-        // Unordered: the server may apply the batch in parallel, and one bad
-        // document does not stop the rest - though with the validator on,
-        // any rejection still surfaces as an exception here.
+        // Unordered insert is faster, and one bad document does not stop the rest.
+        // A rejected document still throws an exception here.
         target.insertMany(batch, new InsertManyOptions().ordered(false));
         int size = batch.size();
         batch.clear();
@@ -181,9 +171,8 @@ final class MongoBenchLoader {
     }
 
     /**
-     * Runs a query with a server-side cursor. Without autocommit off and a fetch
-     * size, the PostgreSQL driver buffers the entire 630 000-row result in
-     * memory before returning the first row.
+     * Runs a query and reads the rows in chunks. Without autocommit off and a
+     * fetch size, the PostgreSQL driver loads all rows into memory at once.
      */
     private static long streamed(String sql, RowHandler handler) {
         return Database.withConnection(connection -> {

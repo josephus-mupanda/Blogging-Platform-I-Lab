@@ -6,23 +6,23 @@ import java.util.Optional;
 
 import org.example.bloggingplatformi.model.Tag;
 
-/** Data access for {@code tags} and the {@code post_tags} association. */
+/** Reads and writes tags, and the post_tags table that links tags to posts. */
 public interface TagDao {
 
     Optional<Tag> findById(int tagId);
 
-    /** Case-insensitive; tag names are stored lower-case. */
+    /** Ignores case. Tag names are stored in lower case. */
     Optional<Tag> findByName(String name);
 
     List<Tag> findAll();
 
-    /** The tags attached to one post, alphabetically. */
+    /** The tags on one post, in alphabetical order. */
     List<Tag> findByPostId(long postId);
 
-    /** Prefix search for the tag picker's autocomplete. */
+    /** Tags whose name starts with the prefix. Used for autocomplete. */
     List<Tag> searchByPrefix(String prefix, int limit);
 
-    /** Tag name to post count, for the tag cloud and analytics screen. */
+    /** Maps each tag name to how many posts use it. */
     Map<String, Long> usageCounts(int limit);
 
     long insert(Tag tag);
@@ -30,8 +30,8 @@ public interface TagDao {
     boolean deleteById(int tagId);
 
     /**
-     * Finds the tag by name, inserting it if it does not exist yet, and
-     * returns its id. This is what lets the editor accept free-text tags.
+     * Returns the id of the tag with this name, creating the tag first if needed.
+     * This lets the editor accept new tags typed by the user.
      */
     int findOrCreate(String name);
 

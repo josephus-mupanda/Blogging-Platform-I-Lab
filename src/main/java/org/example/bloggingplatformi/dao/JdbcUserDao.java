@@ -14,12 +14,8 @@ import org.example.bloggingplatformi.model.Role;
 import org.example.bloggingplatformi.model.User;
 
 /**
- * JDBC implementation of {@link UserDao}.
- *
- * <p>Every statement is parameterized. The {@code LOWER(?)} comparisons pair
- * with the expression indexes in {@code V2__indexes.sql}: a lookup written as
- * {@code LOWER(username) = LOWER(?)} uses an index only if one was built on
- * that same expression, which is why those indexes exist in that exact form.
+ * UserDao for PostgreSQL, using JDBC.
+ * The LOWER(...) lookups match the LOWER indexes in V2__indexes.sql, so they can use them.
  */
 public class JdbcUserDao implements UserDao {
 
@@ -91,9 +87,7 @@ public class JdbcUserDao implements UserDao {
 
     @Override
     public List<User> findAuthorsWithPosts() {
-        // EXISTS rather than a JOIN with DISTINCT: the planner can stop at the
-        // first matching post per user instead of building every pair and then
-        // deduplicating them.
+        // EXISTS stops at the first post per user, so no DISTINCT is needed.
         String sql = "SELECT " + COLUMNS + """
                  FROM users u
                  WHERE EXISTS (SELECT 1 FROM posts p WHERE p.author_id = u.user_id)
@@ -136,8 +130,7 @@ public class JdbcUserDao implements UserDao {
 
     @Override
     public long insert(User user) {
-        // created_at and updated_at are left to their DEFAULT now(): the
-        // database clock is the one that stays consistent across clients.
+        // created_at and updated_at are set by the database (DEFAULT now()).
         String sql = """
                 INSERT INTO users (username, email, password_hash, display_name, bio, role, is_active)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -162,8 +155,7 @@ public class JdbcUserDao implements UserDao {
 
     @Override
     public boolean update(User user) {
-        // password_hash is not updated here; changing a password is its own
-        // operation with its own checks, not a side effect of editing a profile.
+        // password_hash is not changed here. Changing a password is a separate action.
         String sql = """
                 UPDATE users
                    SET username = ?, email = ?, display_name = ?, bio = ?, role = ?, is_active = ?
@@ -220,7 +212,7 @@ public class JdbcUserDao implements UserDao {
         }
     }
 
-    /** Maps the current row. Package-private so other DAOs can reuse it on joins. */
+    /** Turns the current row into a User. Other DAOs reuse it when they join users. */
     static User map(ResultSet rs) throws SQLException {
         return new User(
                 rs.getLong("user_id"),

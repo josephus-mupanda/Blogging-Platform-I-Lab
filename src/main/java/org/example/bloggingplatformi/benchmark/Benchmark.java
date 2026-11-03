@@ -9,30 +9,13 @@ import java.util.List;
 import java.util.function.Supplier;
 
 /**
- * A small benchmark harness: warm up, repeat, report the median.
+ * A small benchmark tool: run a few warm-up rounds, repeat the operation, and
+ * report the median time.
  *
- * <p>Three mistakes this exists to avoid, all of which produce numbers that
- * look authoritative and are wrong:
- *
- * <ol>
- *   <li><b>No warm-up.</b> The first runs of any Java method are interpreted;
- *       HotSpot only compiles it after a few thousand invocations. Timing
- *       without a warm-up measures the interpreter and the JIT, not the code.</li>
- *   <li><b>Reporting a mean.</b> One GC pause makes a single iteration an order
- *       of magnitude slower, and a mean folds that artefact into the result.
- *       {@link BenchmarkResult} reports the median and keeps the mean and max
- *       beside it so the spread stays visible.</li>
- *   <li><b>Dead-code elimination.</b> If a result is never used, the JIT is
- *       entitled to delete the computation entirely and the benchmark then
- *       measures an empty loop. Every operation here returns a value that is
- *       folded into a checksum the harness keeps.</li>
- * </ol>
- *
- * <p>This is not JMH. JMH additionally handles loop unrolling, constant
- * folding, false sharing and on-stack replacement, and anything published as a
- * precise claim should use it. For comparing an indexed query against an
- * unindexed one — where the difference is a factor, not a few percent — this is
- * sufficient, and that limitation belongs in the report.
+ * Warm-up lets the JIT compile the code first. The median ignores one slow run
+ * caused by garbage collection. Each result goes into a checksum so the JIT
+ * cannot remove the work as unused. This is simpler than JMH, but good enough
+ * to compare an indexed query with an unindexed one.
  */
 public final class Benchmark {
 
@@ -54,10 +37,9 @@ public final class Benchmark {
     }
 
     /**
-     * Times {@code operation}, discarding the warm-up runs.
+     * Times the operation. Warm-up runs are not counted.
      *
-     * @param operation must return something derived from its work; the value
-     *                  feeds the checksum that stops the JIT eliminating it
+     * @param operation should return a value from its work, so the JIT cannot skip it
      */
     public BenchmarkResult measure(String name, String variant, Supplier<?> operation) {
         for (int i = 0; i < warmup; i++) {
@@ -68,9 +50,7 @@ public final class Benchmark {
         long checksum = 0;
 
         for (int i = 0; i < iterations; i++) {
-            // nanoTime, never currentTimeMillis: the latter has a resolution
-            // of about 15ms on Windows, which is longer than most of what is
-            // being measured here.
+            // nanoTime is used because currentTimeMillis is only accurate to about 15ms on Windows.
             long start = System.nanoTime();
             Object value = operation.get();
             nanos[i] = System.nanoTime() - start;
@@ -91,11 +71,8 @@ public final class Benchmark {
     }
 
     /**
-     * Folds a value into a number the JIT cannot discard.
-     *
-     * <p>Collections report their size rather than their hash: hashing a large
-     * list costs more than some of the operations being measured and would
-     * dominate the timing.
+     * Turns a result into a number for the checksum.
+     * For collections we use the size, because hashing a big list would be slow.
      */
     private static long consume(Object value) {
         if (value == null) {
@@ -127,7 +104,7 @@ public final class Benchmark {
         results.clear();
     }
 
-    /** Aligned table of every result so far. */
+    /** A text table of all results so far. */
     public String toDisplayTable() {
         StringBuilder table = new StringBuilder(BenchmarkResult.displayHeader());
         for (BenchmarkResult result : results) {
@@ -145,14 +122,7 @@ public final class Benchmark {
         return target;
     }
 
-    /**
-     * Records the environment a run happened in.
-     *
-     * <p>A timing without this is not reproducible: the same benchmark on a
-     * different JVM, core count or operating system is a different number, and
-     * a report that omits them invites its figures to be compared with ones
-     * they cannot be compared to.
-     */
+    /** Describes the JVM, OS, cores and memory, because timings depend on them. */
     public static String environment() {
         Runtime runtime = Runtime.getRuntime();
         return "JVM " + System.getProperty("java.version")

@@ -16,7 +16,7 @@ import org.example.bloggingplatformi.db.Database;
 import org.example.bloggingplatformi.model.RatingStats;
 import org.example.bloggingplatformi.model.Review;
 
-/** PostgreSQL implementation of {@link ReviewDao}. */
+/** ReviewDao for PostgreSQL, using JDBC. */
 public class JdbcReviewDao implements ReviewDao {
 
     private static final String SELECT_BASE = """
@@ -96,8 +96,8 @@ public class JdbcReviewDao implements ReviewDao {
 
     @Override
     public Optional<Double> averageRating(long postId) {
-        // idx_reviews_post_rating covers (post_id, rating), so this is an
-        // index-only scan: the heap is never touched to compute the average.
+        // The index on (post_id, rating) holds everything this query needs,
+        // so PostgreSQL can answer it from the index alone.
         return Database.withConnection(connection -> {
             try (PreparedStatement ps = connection.prepareStatement(
                     "SELECT AVG(rating) FROM reviews WHERE post_id = ?")) {
@@ -105,7 +105,7 @@ public class JdbcReviewDao implements ReviewDao {
                 try (ResultSet rs = ps.executeQuery()) {
                     if (rs.next()) {
                         double value = rs.getDouble(1);
-                        // AVG over no rows is NULL, not 0.
+                        // AVG of no rows is NULL, not 0.
                         return rs.wasNull() ? Optional.<Double>empty() : Optional.of(value);
                     }
                     return Optional.<Double>empty();
@@ -161,7 +161,8 @@ public class JdbcReviewDao implements ReviewDao {
         if (postIds.isEmpty()) {
             return Map.of();
         }
-        // Answered from idx_reviews_post_rating alone (index-only scan).
+        // One grouped query for all the posts. It can also be answered from
+        // the (post_id, rating) index alone.
         String sql = """
                 SELECT post_id, COUNT(*), ROUND(AVG(rating)::numeric, 2)
                   FROM reviews
@@ -213,8 +214,7 @@ public class JdbcReviewDao implements ReviewDao {
                 ps.executeUpdate();
                 return String.valueOf(SqlSupport.generatedKey(ps));
             } catch (SQLException e) {
-                // uq_reviews_post_reviewer surfaces here as a
-                // DuplicateEntityException with field "review".
+                // A second review by the same user becomes a DuplicateEntityException.
                 throw SqlSupport.translate(e, "Review");
             }
         });
@@ -300,8 +300,7 @@ public class JdbcReviewDao implements ReviewDao {
                 rs.getInt("rating"),
                 rs.getString("headline"),
                 rs.getString("body"),
-                // No relational column for per-review sub-scores; see the
-                // design document, section 7.2.
+                // The reviews table has no sub-score columns, so these are empty.
                 Map.of(),
                 0,
                 SqlSupport.getOffsetDateTime(rs, "created_at"),

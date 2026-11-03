@@ -1,9 +1,7 @@
 package org.example.bloggingplatformi.model;
 
 /**
- * Mirrors the {@code ck_comments_status} CHECK constraint and the
- * {@code status} enum in the MongoDB {@code $jsonSchema} validator. Both
- * stores accept exactly these three values.
+ * The status of a comment. PostgreSQL and MongoDB both accept only these three values.
  */
 public enum CommentStatus {
     VISIBLE,
@@ -17,7 +15,7 @@ public enum CommentStatus {
         return CommentStatus.valueOf(value.trim().toUpperCase());
     }
 
-    /** FLAGGED and HIDDEN comments are the moderation queue. */
+    /** FLAGGED and HIDDEN comments appear in the moderation queue. */
     public boolean needsModeration() {
         return this != VISIBLE;
     }

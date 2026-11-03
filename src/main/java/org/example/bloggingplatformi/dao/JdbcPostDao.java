@@ -18,14 +18,9 @@ import org.example.bloggingplatformi.model.PostStatus;
 import org.example.bloggingplatformi.model.PostSummary;
 
 /**
- * JDBC implementation of {@link PostDao}.
- *
- * <p>The search query is assembled from fragments, but never from user input.
- * Each active filter contributes a fixed {@code AND ...= ?} clause and pushes
- * its value onto a parameter list that is bound positionally afterwards. The
- * only free-form text in the final string is the ORDER BY fragment, which
- * comes from the closed {@link org.example.bloggingplatformi.model.PostSort}
- * enum.
+ * PostDao for PostgreSQL, using JDBC.
+ * The search query is built from fixed SQL pieces. User values are always bound
+ * as ? parameters, and the ORDER BY text comes from the PostSort enum.
  */
 public class JdbcPostDao implements PostDao {
 
@@ -41,9 +36,8 @@ public class JdbcPostDao implements PostDao {
             u.display_name AS author_display_name
             """;
 
-    // No comment or review aggregates here. Those live in whichever store
-    // app.comments.store selects, so PostService fills them in from that
-    // store; computing them in this query would always read PostgreSQL.
+    // Comment and review counts are not selected here. They may live in MongoDB,
+    // so PostService fills them in from the active store.
 
     @Override
     public Optional<Post> findById(long postId) {
@@ -84,17 +78,10 @@ public class JdbcPostDao implements PostDao {
         List<Object> params = new ArrayList<>();
 
         if (filter.hasKeyword()) {
-            // Trigram-backed substring match on the title, plus a full-text
-            // match across title and body. The ILIKE arm catches partial words
-            // ("post" inside "posting") that the tsvector tokeniser will not,
-            // and the tsquery arm catches body hits the title index cannot.
-            //
-            // The tsvector expression must be character for character the one
-            // idx_posts_search_tsv is built on: PostgreSQL matches expression
-            // indexes structurally, not semantically. It used to read
-            // to_tsvector('english', p.title || ' ' || p.body), which finds the
-            // same rows but can never use the index, so every search computed a
-            // tsvector for every post. See docs/02-performance-report.md.
+            // ILIKE finds part of a word in the title. Full-text search finds
+            // whole words in the title or body.
+            // The tsvector expression must match idx_posts_search_tsv exactly,
+            // or PostgreSQL will not use the index.
             where.append("""
                      AND (p.title ILIKE ?
                           OR (setweight(to_tsvector('english', coalesce(p.title, '')), 'A') ||
@@ -161,24 +148,16 @@ public class JdbcPostDao implements PostDao {
     }
 
     /**
-     * Binds the collected values positionally.
+     * Binds the filter values to the ? placeholders, in order.
+     * setObject works for String, Long and Integer values.
      *
      * @return the next free parameter index, for LIMIT and OFFSET
      */
     private int bind(PreparedStatement ps, List<Object> params) throws SQLException {
         int index = 1;
         for (Object value : params) {
-            // setObject handles String, Long and Integer correctly for the
-            // column types involved; the branches exist only to be explicit.
-            if (value instanceof String s) {
-                ps.setString(index++, s);
-            } else if (value instanceof Long l) {
-                ps.setLong(index++, l);
-            } else if (value instanceof Integer i) {
-                ps.setInt(index++, i);
-            } else {
-                ps.setObject(index++, value);
-            }
+            ps.setObject(index, value);
+            index++;
         }
         return index;
     }
@@ -266,8 +245,7 @@ public class JdbcPostDao implements PostDao {
                    SET title = ?, body = ?, excerpt = ?, status = ?, published_at = ?
                  WHERE post_id = ?
                 """;
-        // slug is deliberately absent: it is an immutable external identifier,
-        // so editing a title must not break existing links to the post.
+        // The slug is not updated, so links to the post keep working after a title change.
         return Database.inTransaction(connection -> {
             boolean changed;
             try (PreparedStatement ps = connection.prepareStatement(sql)) {
@@ -298,7 +276,7 @@ public class JdbcPostDao implements PostDao {
         });
     }
 
-    /** Batched insert of tag links; one round trip instead of one per tag. */
+    /** Inserts all tag links in one batch instead of one query per tag. */
     private void assignTags(Connection connection, long postId, Set<Integer> tagIds)
             throws SQLException {
         String sql = "INSERT INTO post_tags (post_id, tag_id) VALUES (?, ?)";

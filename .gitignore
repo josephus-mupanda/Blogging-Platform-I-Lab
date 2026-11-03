@@ -39,3 +39,6 @@ build/
 
 ### IntelliJ (per-user) ###
 .idea/workspace.xml
+
+# Personal notes for the lab review
+REVIEW-NOTES.md

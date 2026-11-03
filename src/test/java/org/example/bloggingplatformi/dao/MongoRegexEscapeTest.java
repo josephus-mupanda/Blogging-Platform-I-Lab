@@ -10,9 +10,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * The subtree filter escapes the path prefix by hand rather than with
- * Pattern.quote, because MongoDB only derives index bounds from a plain
- * anchored prefix. These check the hand-rolled escaping is still safe.
+ * Tests the hand-written regex escaping used for the path prefix search.
+ * Pattern.quote is not used because MongoDB can only use the index for a plain prefix.
  */
 class MongoRegexEscapeTest {
 

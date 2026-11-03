@@ -7,12 +7,8 @@ import java.util.Objects;
 import org.example.bloggingplatformi.util.Slugs;
 
 /**
- * A row of {@code tags}.
- *
- * <p>Names are stored lower-case. That is enforced by the
- * {@code ck_tags_lower} CHECK constraint, so "Java" and "java" cannot both
- * exist; the compact constructor normalizes rather than letting the insert
- * fail downstream.
+ * A row of the tags table. The database only allows lower-case names,
+ * so the constructor lower-cases the name before it is saved.
  */
 public record Tag(
         int tagId,
@@ -32,7 +28,7 @@ public record Tag(
         }
     }
 
-    /** A new, not-yet-persisted tag. The slug is derived from the name. */
+    /** A new tag, not yet saved. The slug is made from the name. */
     public static Tag of(String name) {
         return new Tag(0, name, null, null);
     }

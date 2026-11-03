@@ -11,37 +11,24 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * An in-memory inverted index: term to the set of post ids containing it.
+ * An in-memory inverted index: a hash map from each word to the ids of the
+ * posts that contain it. It is the same idea as a GIN index in PostgreSQL.
  *
- * <p>This is the hashing structure Epic 3.1 asks for, and it is the same idea
- * the database's GIN index implements on disk. Building it in memory makes the
- * mechanism visible and gives Phase 4 something to measure the database
- * against.
+ * How it works: we split each post into words once, when it is added. A
+ * one-word search is then a single hash lookup, O(1), instead of scanning
+ * every post, O(n). A multi-word search intersects the id sets, smallest first.
  *
- * <p><b>Why it is fast.</b> A naive keyword search scans every post and tests
- * every title, which is O(n·m) for n posts of m words. The inverted index pays
- * that cost once at build time and then answers a single-term query in O(1):
- * one hash probe returns the matching ids directly. A multi-term query
- * intersects the posting lists, starting from the smallest, so the work is
- * bounded by the rarest term rather than by the corpus.
- *
- * <p><b>What it is not.</b> There is no stemming, so "index" does not match
- * "indexing", and no ranking — every hit is equal. PostgreSQL's
- * {@code to_tsvector} does both. That difference is a finding for the
- * comparison, not something to paper over.
+ * Limits: no stemming ("index" does not match "indexing") and no ranking.
  */
 public class InvertedIndex {
 
-    /**
-     * Words carrying no discriminating power. Indexing them costs memory and
-     * returns almost every document, which is the opposite of selective.
-     */
+    /** Common words we skip, because almost every post contains them. */
     private static final Set<String> STOP_WORDS = Set.of(
             "a", "an", "and", "are", "as", "at", "be", "but", "by", "for",
             "from", "has", "have", "in", "is", "it", "its", "of", "on", "or",
             "that", "the", "this", "to", "was", "were", "will", "with");
 
-    /** Single characters match too much to be worth a posting list. */
+    /** Single letters match too many posts to be useful. */
     private static final int MIN_TERM_LENGTH = 2;
 
     private final Map<String, Set<Long>> postings = new HashMap<>();
@@ -54,8 +41,7 @@ public class InvertedIndex {
             terms.addAll(tokenize(text));
         }
 
-        // Replacing an existing document, so its old terms are removed first;
-        // otherwise an edited title keeps matching words it no longer contains.
+        // Remove the old words first, so an edited post does not match words it no longer has.
         remove(documentId);
 
         for (String term : terms) {
@@ -74,8 +60,7 @@ public class InvertedIndex {
             Set<Long> ids = postings.get(term);
             if (ids != null) {
                 ids.remove(documentId);
-                // An empty posting list is a leak: the term would otherwise
-                // stay in the map forever, inflating termCount and memory.
+                // Drop the word when no post uses it, so the map does not keep growing.
                 if (ids.isEmpty()) {
                     postings.remove(term);
                 }
@@ -83,7 +68,7 @@ public class InvertedIndex {
         }
     }
 
-    /** Ids containing one exact term. O(1). */
+    /** Ids of posts containing one exact word. O(1). */
     public Set<Long> lookup(String term) {
         if (term == null || term.isBlank()) {
             return Set.of();
@@ -93,12 +78,8 @@ public class InvertedIndex {
     }
 
     /**
-     * Ids containing <em>every</em> term in the query (an AND search).
-     *
-     * <p>The posting lists are intersected smallest-first. Intersection cost is
-     * bounded by the smallest list, so starting there means a query like
-     * "the postgresql" does work proportional to the few "postgresql"
-     * documents rather than to the many matching the common word.
+     * Ids of posts containing every word in the query (an AND search).
+     * We start from the smallest id set, so the work stays small.
      */
     public Set<Long> search(String query) {
         List<String> terms = tokenize(query);
@@ -110,8 +91,7 @@ public class InvertedIndex {
         for (String term : terms) {
             Set<Long> ids = postings.get(term);
             if (ids == null || ids.isEmpty()) {
-                // One term matches nothing, so the AND result is empty and
-                // there is no point intersecting anything.
+                // One word has no matches, so the AND result must be empty.
                 return Set.of();
             }
             lists.add(ids);
@@ -125,7 +105,7 @@ public class InvertedIndex {
         return result;
     }
 
-    /** Ids containing at least one term (an OR search). */
+    /** Ids of posts containing at least one word (an OR search). */
     public Set<Long> searchAny(String query) {
         Set<Long> result = new HashSet<>();
         for (String term : tokenize(query)) {
@@ -142,7 +122,7 @@ public class InvertedIndex {
         termsByDocument.clear();
     }
 
-    /** Distinct indexed terms: the index's width. */
+    /** Number of different words in the index. */
     public int termCount() {
         return postings.size();
     }
@@ -151,19 +131,14 @@ public class InvertedIndex {
         return termsByDocument.size();
     }
 
-    /** Total postings, which is what the index actually costs in memory. */
+    /** Total (word, post id) pairs stored. This is the main memory cost. */
     public int postingCount() {
         return postings.values().stream().mapToInt(Set::size).sum();
     }
 
     /**
-     * Splits text into normalized terms.
-     *
-     * <p>Splitting on everything that is not a letter or digit means "B-tree"
-     * yields the two terms "tree" and nothing else, since "b" falls below the
-     * minimum length. A search for "b-tree" tokenizes the same way and so
-     * still finds the post. Accents are left alone here; the database handles
-     * those through its own collation.
+     * Splits text into lowercase words on anything that is not a letter or digit.
+     * Stop words and one-letter words are dropped, so "B-tree" gives just "tree".
      */
     public static List<String> tokenize(String text) {
         if (text == null || text.isBlank()) {

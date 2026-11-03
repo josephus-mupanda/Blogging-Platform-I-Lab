@@ -1,15 +1,10 @@
 package org.example.bloggingplatformi.exception;
 
 /**
- * Thrown when a write would violate a uniqueness rule: a taken username or
- * email, a slug already in use, or a second review by the same user on the
- * same post.
- *
- * <p>The database enforces every one of these with a UNIQUE constraint, and
- * that enforcement is the one that counts. The service layer also checks up
- * front, purely so the user gets "that username is taken" instead of a
- * constraint name. The check is advisory; under concurrency the constraint
- * wins, and the DAO translates SQLSTATE 23505 into this same exception.
+ * Thrown when a value must be unique but is already used, for example a taken
+ * username or a second review of the same post by the same user.
+ * The services throw it with a clear message. The DAOs also throw it when a
+ * unique constraint in the database fails.
  */
 public class DuplicateEntityException extends RuntimeException {
 
@@ -25,7 +20,7 @@ public class DuplicateEntityException extends RuntimeException {
         this.field = field;
     }
 
-    /** The conflicting field, so the UI can highlight the right input. */
+    /** The field that clashed, so the UI can highlight the right input. */
     public String getField() {
         return field;
     }

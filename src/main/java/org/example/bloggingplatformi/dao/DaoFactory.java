@@ -1,54 +1,26 @@
 package org.example.bloggingplatformi.dao;
 
-import java.util.Locale;
-
 import org.example.bloggingplatformi.config.AppConfig;
 
 /**
- * Supplies DAO instances, and decides which comment and review store backs
- * this run.
- *
- * <p>{@code app.comments.store} chooses between {@code POSTGRES} and
- * {@code MONGO}. Everything above this class is written against the
- * interfaces, so flipping that one property swaps the storage engine for
- * comments and reviews without another line changing. That property is also
- * what lets the Phase 4 harness benchmark both engines in a single run by
- * constructing each implementation directly.
- *
- * <p>The DAOs are stateless, so single shared instances are safe to reuse
- * across threads.
+ * Creates the DAOs and hands out one shared instance of each.
+ * The app.comments.store setting picks POSTGRES or MONGO for comments and reviews.
+ * The rest of the app only uses the interfaces, so no other code has to change.
  */
 public final class DaoFactory {
 
-    /** Valid values for {@code app.comments.store}. */
+    /** Allowed values for app.comments.store. */
     public enum CommentStore {
         POSTGRES,
-        MONGO;
-
-        static CommentStore from(String value) {
-            if (value == null || value.isBlank()) {
-                return MONGO;
-            }
-            String normalized = value.strip().toUpperCase(Locale.ROOT);
-            return switch (normalized) {
-                case "POSTGRES", "POSTGRESQL", "SQL" -> POSTGRES;
-                case "MONGO", "MONGODB", "NOSQL" -> MONGO;
-                default -> throw new IllegalArgumentException(
-                        "app.comments.store must be POSTGRES or MONGO, was: " + value);
-            };
-        }
+        MONGO
     }
 
     private static final UserDao USER_DAO = new JdbcUserDao();
     private static final TagDao TAG_DAO = new JdbcTagDao();
 
     /**
-     * The post DAO, wrapped in {@link CachedPostDao} unless caching is off.
-     *
-     * <p>Decorating here rather than caching inside the service means the
-     * layers above cannot forget to invalidate: they never learn a cache
-     * exists. Setting {@code app.cache.enabled=false} returns the bare DAO,
-     * which is how Phase 4 measures the same workload with and without it.
+     * The post DAO, wrapped in CachedPostDao unless app.cache.enabled is false.
+     * The services do not know the cache exists, so they cannot forget to clear it.
      */
     private static final PostDao POST_DAO = buildPostDao();
 
@@ -62,9 +34,9 @@ public final class DaoFactory {
         return new CachedPostDao(jdbc, config.getInt("app.cache.posts.maxEntries", 200));
     }
 
-    private static volatile CommentStore commentStore;
-    private static volatile CommentDao commentDao;
-    private static volatile ReviewDao reviewDao;
+    private static CommentStore commentStore;
+    private static CommentDao commentDao;
+    private static ReviewDao reviewDao;
 
     private DaoFactory() {
     }
@@ -81,59 +53,30 @@ public final class DaoFactory {
         return TAG_DAO;
     }
 
-    /**
-     * The caching decorator, when one is active.
-     *
-     * <p>Used by the Phase 4 harness to read the hit rate and to compare
-     * against {@link CachedPostDao#delegate()}, the uncached path.
-     */
-    public static java.util.Optional<CachedPostDao> postCache() {
-        return POST_DAO instanceof CachedPostDao cached
-                ? java.util.Optional.of(cached)
-                : java.util.Optional.empty();
-    }
-
-    public static CommentStore commentStore() {
+    /** Reads app.comments.store the first time, for example MONGO. */
+    public static synchronized CommentStore commentStore() {
         if (commentStore == null) {
-            synchronized (DaoFactory.class) {
-                if (commentStore == null) {
-                    commentStore = CommentStore.from(
-                            AppConfig.get().getString("app.comments.store", "MONGO"));
-                }
-            }
+            String value = AppConfig.get().getString("app.comments.store", "MONGO");
+            commentStore = CommentStore.valueOf(value.trim().toUpperCase());
         }
         return commentStore;
     }
 
-    public static CommentDao comments() {
-        CommentDao local = commentDao;
-        if (local == null) {
-            synchronized (DaoFactory.class) {
-                local = commentDao;
-                if (local == null) {
-                    local = commentsFor(commentStore());
-                    commentDao = local;
-                }
-            }
+    public static synchronized CommentDao comments() {
+        if (commentDao == null) {
+            commentDao = commentsFor(commentStore());
         }
-        return local;
+        return commentDao;
     }
 
-    public static ReviewDao reviews() {
-        ReviewDao local = reviewDao;
-        if (local == null) {
-            synchronized (DaoFactory.class) {
-                local = reviewDao;
-                if (local == null) {
-                    local = reviewsFor(commentStore());
-                    reviewDao = local;
-                }
-            }
+    public static synchronized ReviewDao reviews() {
+        if (reviewDao == null) {
+            reviewDao = reviewsFor(commentStore());
         }
-        return local;
+        return reviewDao;
     }
 
-    /** Builds a specific implementation regardless of configuration, for benchmarks and tests. */
+    /** Builds the chosen version, ignoring the config. Used by benchmarks and tests. */
     public static CommentDao commentsFor(CommentStore store) {
         return switch (store) {
             case POSTGRES -> new JdbcCommentDao();
@@ -148,14 +91,14 @@ public final class DaoFactory {
         };
     }
 
-    /** Overrides the configured store at runtime. Used by tests and the Phase 4 harness. */
+    /** Switches the comment and review store while the app runs. Used by tests and benchmarks. */
     public static synchronized void useCommentStore(CommentStore store) {
         commentStore = store;
         commentDao = commentsFor(store);
         reviewDao = reviewsFor(store);
     }
 
-    /** Drops the cached instances so the next call re-reads the configuration. */
+    /** Clears the saved instances so the next call reads the config again. */
     public static synchronized void reset() {
         commentStore = null;
         commentDao = null;

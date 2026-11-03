@@ -6,18 +6,15 @@ import java.util.function.Predicate;
 import java.util.regex.Pattern;
 
 /**
- * Generates URL-safe slugs for posts and tags.
- *
- * <p>A slug is a candidate key, not a copy of the title: once assigned it does
- * not change when the title is edited, so links keep working. Generation
- * therefore happens exactly once, at creation.
+ * Makes URL-safe slugs for posts and tags, like "my-first-post".
+ * A slug is made once, when the post is created, and does not change if the title is edited.
  */
 public final class Slugs {
 
-    /** Matches the {@code VARCHAR(280)} width of {@code posts.slug}. */
+    /** Same as the VARCHAR(280) size of posts.slug. */
     public static final int MAX_POST_SLUG_LENGTH = 280;
 
-    /** Matches the {@code VARCHAR(60)} width of {@code tags.slug}. */
+    /** Same as the VARCHAR(60) size of tags.slug. */
     public static final int MAX_TAG_SLUG_LENGTH = 60;
 
     private static final Pattern NON_ALPHANUMERIC = Pattern.compile("[^a-z0-9]+");
@@ -28,12 +25,9 @@ public final class Slugs {
     }
 
     /**
-     * Converts arbitrary text into a lower-case, hyphen-separated slug.
-     *
-     * <p>Accents are folded rather than dropped, so "Café Patterns" becomes
-     * {@code cafe-patterns} and not {@code caf-patterns}. Text in a script
-     * with no Latin equivalent folds away entirely, which is why
-     * {@link #slugify(String, int, String)} takes a fallback.
+     * Turns text into a lower-case slug with hyphens between words.
+     * Accents are removed but the letter is kept, so "Café Patterns" becomes "cafe-patterns".
+     * If nothing is left, for example with non-Latin text, the fallback is used.
      */
     public static String slugify(String input, int maxLength) {
         return slugify(input, maxLength, "post");
@@ -44,8 +38,7 @@ public final class Slugs {
             return fallback;
         }
 
-        // NFD splits "é" into "e" + combining acute, so the mark can be removed
-        // on its own and the base letter survives.
+        // NFD splits "é" into "e" plus an accent mark, so we can remove just the mark.
         String normalized = Normalizer.normalize(input, Normalizer.Form.NFD);
         normalized = COMBINING_MARKS.matcher(normalized).replaceAll("");
 
@@ -59,7 +52,7 @@ public final class Slugs {
         }
         if (slug.length() > maxLength) {
             slug = slug.substring(0, maxLength);
-            // Truncating mid-word can leave a trailing hyphen.
+            // Cutting the slug short can leave a hyphen at the end.
             slug = EDGE_HYPHENS.matcher(slug).replaceAll("");
         }
         return slug;
@@ -74,16 +67,10 @@ public final class Slugs {
     }
 
     /**
-     * Appends {@code -2}, {@code -3} and so on until {@code isTaken} says the
-     * slug is free.
+     * Adds -2, -3 and so on until the slug is free. Another user could still take
+     * the same slug before the insert, so the database unique constraint is the final check.
      *
-     * <p>This is a convenience, not a guarantee. Between the check and the
-     * insert another transaction can claim the same slug; the
-     * {@code uq_posts_slug} constraint is what actually prevents the duplicate,
-     * and the DAO turns that violation into a
-     * {@link org.example.bloggingplatformi.exception.DuplicateEntityException}.
-     *
-     * @param isTaken returns true when the candidate already exists
+     * @param isTaken returns true when the slug already exists
      */
     public static String uniquify(String base, int maxLength, Predicate<String> isTaken) {
         if (!isTaken.test(base)) {
@@ -99,8 +86,7 @@ public final class Slugs {
                 return candidate;
             }
         }
-        // A thousand collisions means something is wrong with the caller, not
-        // with the data. Fall back to something guaranteed unique.
+        // After 1000 tries something is wrong, so use the current time to make it unique.
         return base + "-" + System.currentTimeMillis();
     }
 }

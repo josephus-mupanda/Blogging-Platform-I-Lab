@@ -1,60 +1,32 @@
 package org.example.bloggingplatformi.ui;
 
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 import javafx.application.Platform;
 import javafx.concurrent.Task;
-import javafx.scene.Node;
 
 /**
- * Runs database work off the JavaFX application thread.
- *
- * <p>This is not optional politeness. The FX thread draws every frame, so a
- * query that blocks it for 300ms freezes the window for 300ms — and the slow
- * queries are precisely the ones Phase 4 is meant to study, so the UI would be
- * at its worst exactly when it is being demonstrated. Every service call from
- * a view goes through here.
- *
- * <p>The pool is small and daemon-threaded: daemon so a forgotten task cannot
- * keep the JVM alive after the window closes, and small because the Hikari
- * pool is the real limit on concurrency anyway.
+ * Runs database calls on a background thread so the window does not freeze,
+ * then hands the result back to the JavaFX thread.
+ * Every service call from a view goes through this class.
  */
 public final class Async {
 
-    private static final ExecutorService EXECUTOR = Executors.newFixedThreadPool(4, daemonFactory());
-
     /**
-     * Tasks submitted whose result has not yet been handed back to the FX
-     * thread. Counted down only after the callback has run, so zero means the
-     * UI has finished reacting to every query it started, not merely that the
-     * queries returned. The end-to-end UI test waits on this instead of
-     * guessing with sleeps.
+     * Number of tasks whose callback has not finished yet. AtomicInteger is a
+     * counter that is safe to change from several threads.
+     * The UI test waits for this to reach zero instead of using sleeps.
      */
     private static final AtomicInteger IN_FLIGHT = new AtomicInteger();
 
     private Async() {
     }
 
-    private static ThreadFactory daemonFactory() {
-        return runnable -> {
-            Thread thread = new Thread(runnable, "db-worker");
-            thread.setDaemon(true);
-            return thread;
-        };
-    }
-
     /**
-     * Runs {@code work} in the background and hands the result to
-     * {@code onSuccess} back on the FX thread.
-     *
-     * <p>Failures go to {@link Dialogs#error}. Swallowing them would leave the
-     * UI showing stale data with no indication that anything went wrong, which
-     * is worse than an error dialog.
+     * Runs {@code work} in the background and passes the result to {@code onSuccess} on the FX thread.
+     * If it fails, an error dialog is shown.
      */
     public static <T> void run(Supplier<T> work, Consumer<T> onSuccess) {
         run(work, onSuccess, null);
@@ -89,12 +61,14 @@ public final class Async {
         });
 
         IN_FLIGHT.incrementAndGet();
-        try {
-            EXECUTOR.execute(task);
-        } catch (RuntimeException e) {
-            IN_FLIGHT.decrementAndGet();
-            throw e;
-        }
+        startInBackground(task);
+    }
+
+    // A daemon thread does not keep the app running after the window is closed.
+    private static void startInBackground(Runnable work) {
+        Thread thread = new Thread(work);
+        thread.setDaemon(true);
+        thread.start();
     }
 
     /** Background tasks whose FX-thread callback has not finished yet. */
@@ -102,34 +76,14 @@ public final class Async {
         return IN_FLIGHT.get();
     }
 
-    /**
-     * As {@link #run}, but disables {@code busyNode} for the duration.
-     *
-     * <p>Prevents the double-submit that happens when a save takes long enough
-     * for the user to click again.
-     */
-    public static <T> void runDisabling(Node busyNode, Supplier<T> work, Consumer<T> onSuccess) {
-        busyNode.setDisable(true);
-        run(work,
-            result -> {
-                busyNode.setDisable(false);
-                onSuccess.accept(result);
-            },
-            error -> {
-                busyNode.setDisable(false);
-                Dialogs.error("Something went wrong", error);
-            });
-    }
-
-    /** Fire-and-forget background work, for things like the view counter. */
+    /** Runs background work with no callback, for things like the view counter. */
     public static void runQuietly(Runnable work) {
         IN_FLIGHT.incrementAndGet();
-        EXECUTOR.execute(() -> {
+        startInBackground(() -> {
             try {
                 work.run();
             } catch (RuntimeException ignored) {
-                // Deliberately silent: a failed view-count increment must not
-                // interrupt someone reading a post.
+                // A failed view count should not interrupt someone reading a post.
             } finally {
                 IN_FLIGHT.decrementAndGet();
             }
@@ -143,9 +97,5 @@ public final class Async {
         } else {
             Platform.runLater(work);
         }
-    }
-
-    public static void shutdown() {
-        EXECUTOR.shutdownNow();
     }
 }

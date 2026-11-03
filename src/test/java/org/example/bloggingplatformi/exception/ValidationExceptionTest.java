@@ -11,13 +11,13 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/** Tests for ValidationException, its Collector, and DuplicateEntityException. */
 class ValidationExceptionTest {
 
     @Test
     @DisplayName("the collector gathers every problem rather than stopping at the first")
     void collectsAllErrors() {
-        // This is the point of the type: the Phase 3 form marks all of its bad
-        // inputs in one pass instead of making the user fix them one at a time.
+        // The form can then show every bad field at once, not one at a time.
         ValidationException.Collector errors = new ValidationException.Collector();
         errors.reject("title", "A title is required.");
         errors.reject("body", "A post needs a body.");

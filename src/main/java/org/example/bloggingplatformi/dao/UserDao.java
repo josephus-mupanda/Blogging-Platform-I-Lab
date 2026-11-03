@@ -6,11 +6,8 @@ import java.util.Optional;
 import org.example.bloggingplatformi.model.User;
 
 /**
- * Data access for {@code users}.
- *
- * <p>Lookups return {@link Optional} rather than null or an exception: not
- * finding a user is an ordinary outcome of a search, and the caller is forced
- * to say what it means in context.
+ * Reads and writes rows in the users table.
+ * Lookups return Optional because "no such user" is a normal result, not an error.
  */
 public interface UserDao {
 
@@ -22,7 +19,7 @@ public interface UserDao {
 
     List<User> findAll(int limit, int offset);
 
-    /** Authors with at least one post, for the author filter dropdown. */
+    /** Users who have written at least one post. Used by the author filter. */
     List<User> findAuthorsWithPosts();
 
     boolean existsByUsername(String username);
@@ -36,10 +33,8 @@ public interface UserDao {
     boolean update(User user);
 
     /**
-     * Deletes the user. The posts they authored cascade away with them, while
-     * their comments survive with a null author, per the FK rules in the schema.
-     *
-     * @return true if a row was deleted
+     * Deletes the user. Their posts are deleted too (cascade).
+     * Their comments stay, with the author set to null.
      */
     boolean deleteById(long userId);
 

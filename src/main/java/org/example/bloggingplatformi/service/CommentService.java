@@ -11,13 +11,9 @@ import org.example.bloggingplatformi.model.Comment;
 import org.example.bloggingplatformi.model.CommentStatus;
 
 /**
- * Business rules for comments, written entirely against {@link CommentDao} so
- * it behaves identically whether the active store is PostgreSQL or MongoDB.
- *
- * <p>That is not an abstraction for its own sake: it is the control that makes
- * the Phase 4 measurement fair. The same service code drives both engines, so
- * any timing difference comes from the store rather than from two different
- * implementations of the surrounding logic.
+ * Business rules for comments. It only talks to the {@link CommentDao}
+ * interface, so the same code works with PostgreSQL and with MongoDB.
+ * This keeps the speed comparison between the two databases fair.
  */
 public class CommentService {
 
@@ -33,7 +29,7 @@ public class CommentService {
         this.commentDao = commentDao;
     }
 
-    /** Which engine is active, for the status bar and benchmark labels. */
+    /** Name of the database that stores comments, for the status bar and benchmarks. */
     public String activeStore() {
         return commentDao.storeName();
     }
@@ -48,9 +44,8 @@ public class CommentService {
     }
 
     /**
-     * One post's thread, parents before their replies. The list is already in
-     * display order, so the UI indents on {@link Comment#depth()} without
-     * building a tree.
+     * Returns a post's comments with each parent before its replies.
+     * The UI can show them in this order and indent each one by its depth.
      */
     public List<Comment> threadFor(long postId, boolean includeHidden) {
         return commentDao.findByPostId(postId, includeHidden);
@@ -95,12 +90,8 @@ public class CommentService {
     }
 
     /**
-     * Adds a reply.
-     *
-     * <p>The parent is loaded first rather than trusting the caller's id,
-     * because the reply inherits the parent's path and depth. A wrong parent
-     * would put the comment in the wrong place in the thread, and in MongoDB a
-     * wrong path is not something a constraint will catch later.
+     * Adds a reply. The parent is loaded first because the reply copies its
+     * path and depth. MongoDB has no constraint that would catch a wrong path.
      */
     public Comment addReply(String parentId, Long authorId, String authorName, String body) {
         validate(body);
@@ -147,12 +138,8 @@ public class CommentService {
     }
 
     /**
-     * Removes every comment on a post.
-     *
-     * <p>Required when comments live in MongoDB, because deleting the
-     * PostgreSQL post row cannot cascade into another database. Harmless when
-     * both live in PostgreSQL, where the rows are already gone by the time
-     * this runs and it deletes nothing.
+     * Removes every comment on a post. This is needed for MongoDB, because a
+     * PostgreSQL cascade cannot reach another database. In PostgreSQL it finds nothing to delete.
      */
     public long deleteForPost(long postId) {
         return commentDao.deleteByPostId(postId);

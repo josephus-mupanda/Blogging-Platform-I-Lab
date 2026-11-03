@@ -12,6 +12,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Supplier;
 
 import com.mongodb.MongoException;
 import com.mongodb.MongoWriteException;
@@ -33,12 +34,8 @@ import org.example.bloggingplatformi.model.RatingStats;
 import org.example.bloggingplatformi.model.Review;
 
 /**
- * MongoDB implementation of {@link ReviewDao}.
- *
- * <p>Carries the {@code criteria} sub-document that the relational table
- * cannot hold without a sparse column set or an EAV side table, and computes
- * aggregates through the aggregation pipeline rather than with SQL
- * {@code AVG}/{@code GROUP BY}.
+ * ReviewDao for MongoDB. Unlike the SQL table, each review can also hold
+ * a criteria sub-document with extra scores. Averages and counts use the aggregation pipeline.
  */
 public class MongoReviewDao implements ReviewDao {
 
@@ -104,8 +101,7 @@ public class MongoReviewDao implements ReviewDao {
                     Aggregates.group(null, Accumulators.avg("average", "$" + F_RATING))
             )).first();
 
-            // An empty match produces no group document at all, which is the
-            // document-store equivalent of SQL's AVG-over-no-rows returning NULL.
+            // No reviews means no result document, like AVG returning NULL in SQL.
             if (result == null) {
                 return Optional.<Double>empty();
             }
@@ -155,8 +151,7 @@ public class MongoReviewDao implements ReviewDao {
                 long postId = ((Number) row.get("_id")).longValue();
                 long count = ((Number) row.get("n")).longValue();
                 Number avg = (Number) row.get("avg");
-                // Same rounding as ROUND(AVG(rating), 2) on the SQL side, so
-                // the two stores display identical figures for identical data.
+                // Round to 2 places, the same as the SQL version, so both stores show the same number.
                 BigDecimal average = avg == null ? null
                         : BigDecimal.valueOf(avg.doubleValue()).setScale(2, RoundingMode.HALF_UP);
                 stats.put(postId, new RatingStats(count, average));
@@ -194,8 +189,7 @@ public class MongoReviewDao implements ReviewDao {
             reviews().insertOne(document);
             return id.toHexString();
         } catch (MongoWriteException e) {
-            // uq_reviews_post_reviewer is a unique index here, so the document
-            // store rejects a second review exactly as the SQL constraint does.
+            // A unique index on (postId, reviewerId) blocks a second review by the same user.
             if (e.getError().getCategory() == com.mongodb.ErrorCategory.DUPLICATE_KEY) {
                 throw new DuplicateEntityException("review",
                         "This user has already reviewed this post.", e);
@@ -296,16 +290,11 @@ public class MongoReviewDao implements ReviewDao {
         return ObjectId.isValid(id.strip()) ? new ObjectId(id.strip()) : null;
     }
 
-    private static <T> T run(MongoOperation<T> operation) {
+    private static <T> T run(Supplier<T> operation) {
         try {
-            return operation.execute();
+            return operation.get();
         } catch (MongoException e) {
             throw new DataAccessException("MongoDB review operation failed: " + e.getMessage(), e);
         }
-    }
-
-    @FunctionalInterface
-    private interface MongoOperation<T> {
-        T execute();
     }
 }

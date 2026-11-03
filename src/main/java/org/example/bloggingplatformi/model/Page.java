@@ -1,15 +1,14 @@
 package org.example.bloggingplatformi.model;
 
 import java.util.List;
-import java.util.function.Function;
 
 /**
- * One page of results plus the totals the UI needs to render pager controls.
+ * One page of results, plus the totals the UI needs for its page buttons.
  *
- * @param content    the rows on this page
- * @param pageNumber zero-based
- * @param pageSize   rows requested per page
- * @param totalElements total rows matching the query, ignoring pagination
+ * @param content       the rows on this page
+ * @param pageNumber    starts at 0
+ * @param pageSize      rows asked for per page
+ * @param totalElements rows that match the query across all pages
  */
 public record Page<T>(
         List<T> content,
@@ -36,7 +35,7 @@ public record Page<T>(
         if (totalElements == 0) {
             return 0;
         }
-        // Integer ceiling division; avoids floating point entirely.
+        // Rounds up using whole numbers only, so 41 rows at 20 per page gives 3 pages.
         return (int) ((totalElements + pageSize - 1) / pageSize);
     }
 
@@ -52,14 +51,8 @@ public record Page<T>(
         return content.isEmpty();
     }
 
-    /** Zero-based index of the first row on this page, for "showing 21-40 of 97". */
+    /** Index of the first row on this page, starting at 0. Used for "showing 21-40 of 97". */
     public long firstElementIndex() {
         return (long) pageNumber * pageSize;
-    }
-
-    /** Converts the rows while keeping the paging metadata intact. */
-    public <R> Page<R> map(Function<? super T, ? extends R> mapper) {
-        return new Page<>(content.stream().<R>map(mapper).toList(),
-                pageNumber, pageSize, totalElements);
     }
 }

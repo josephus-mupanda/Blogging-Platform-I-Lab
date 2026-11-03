@@ -12,8 +12,8 @@ import org.example.bloggingplatformi.model.RatingStats;
 import org.example.bloggingplatformi.model.Review;
 
 /**
- * Data access for reviews. Like {@link CommentDao} this has a relational and a
- * document implementation, selected by {@code app.comments.store}.
+ * Reads and writes reviews. Like CommentDao, it has a PostgreSQL and a MongoDB
+ * version, chosen by the app.comments.store setting.
  */
 public interface ReviewDao {
 
@@ -25,22 +25,21 @@ public interface ReviewDao {
 
     List<Review> findByReviewer(long reviewerId, int limit);
 
-    /** The one review this user left on this post, if any. */
+    /** The review this user left on this post, if there is one. */
     Optional<Review> findByPostAndReviewer(long postId, long reviewerId);
 
-    /** Mean rating for a post, or empty when it has no reviews. */
+    /** Average rating for a post, or empty if it has no reviews. */
     Optional<Double> averageRating(long postId);
 
-    /** Rating value to number of reviews, for the distribution chart. */
+    /** Maps each rating value to how many reviews gave it. */
     Map<Integer, Long> ratingDistribution(long postId);
 
     long countByPostId(long postId);
 
     /**
-     * Review count and average for a page of posts, in one round trip.
-     *
-     * <p>Posts with no reviews may be absent from the map. The default loops;
-     * the real stores override it with a single grouped query.
+     * Review count and average for many posts at once.
+     * Posts with no reviews may be missing from the map. Both stores override
+     * this default loop with one grouped query.
      */
     default Map<Long, RatingStats> statsByPostIds(Collection<Long> postIds) {
         Map<Long, RatingStats> stats = new HashMap<>();
@@ -57,9 +56,8 @@ public interface ReviewDao {
     long count();
 
     /**
-     * @throws org.example.bloggingplatformi.exception.DuplicateEntityException
-     *         if this user has already reviewed this post. Both stores enforce
-     *         it: a UNIQUE constraint in PostgreSQL, a unique index in MongoDB.
+     * Saves a new review. Throws DuplicateEntityException if the user already
+     * reviewed this post (a UNIQUE constraint in PostgreSQL, a unique index in MongoDB).
      */
     String insert(Review review);
 

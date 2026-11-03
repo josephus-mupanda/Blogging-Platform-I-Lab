@@ -2,6 +2,7 @@ package org.example.bloggingplatformi.ui;
 
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ExecutionException;
 
 import javafx.scene.control.Alert;
 import javafx.scene.control.ButtonBar;
@@ -37,11 +38,8 @@ public final class Dialogs {
     }
 
     /**
-     * Asks for confirmation before something irreversible.
-     *
-     * <p>The affirmative button is explicitly labelled with the action ("Delete
-     * post") rather than "OK", so the consequence is readable without going
-     * back to the message.
+     * Asks the user to confirm an action that cannot be undone.
+     * The confirm button shows the action name (for example "Delete post") instead of "OK".
      */
     public static boolean confirm(String title, String message, String confirmLabel) {
         ButtonType confirmButton = new ButtonType(confirmLabel, ButtonBar.ButtonData.OK_DONE);
@@ -59,8 +57,7 @@ public final class Dialogs {
         alert.setTitle(title);
         alert.setHeaderText(title);
 
-        // A Label wraps; the built-in content text does not, so a long message
-        // stretches the dialog across the screen instead of growing downward.
+        // A Label wraps long text. The built-in content text does not, so the dialog would get too wide.
         Label content = new Label(message);
         content.setWrapText(true);
         content.setMaxWidth(430);
@@ -74,12 +71,8 @@ public final class Dialogs {
     }
 
     /**
-     * Turns an exception into something a user can act on.
-     *
-     * <p>The service layer already distinguishes these cases, so the UI can
-     * show "That username is already taken" instead of a stack trace or a
-     * constraint name. Anything unrecognised falls back to its message, and a
-     * connection failure gets the one instruction that actually helps.
+     * Turns an exception into a message a user can understand.
+     * Each exception type from the service layer gets its own message.
      */
     public static String humanise(Throwable error) {
         Throwable cause = unwrap(error);
@@ -109,12 +102,12 @@ public final class Dialogs {
                 : message;
     }
 
-    /** JavaFX wraps a task failure, so the useful exception is one level down. */
+    /** A failed task can wrap the real exception, so this takes it out. */
     private static Throwable unwrap(Throwable error) {
         if (error == null) {
             return new IllegalStateException("Unknown error");
         }
-        if (error instanceof java.util.concurrent.ExecutionException && error.getCause() != null) {
+        if (error instanceof ExecutionException && error.getCause() != null) {
             return error.getCause();
         }
         if (error instanceof RuntimeException

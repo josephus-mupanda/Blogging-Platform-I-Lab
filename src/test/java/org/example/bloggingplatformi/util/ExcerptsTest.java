@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/** Tests for Excerpts, which builds the short preview text of a post. */
 class ExcerptsTest {
 
     @Test
@@ -25,8 +26,7 @@ class ExcerptsTest {
     @Test
     @DisplayName("empty and null bodies produce an empty excerpt, never null")
     void handlesMissingBody() {
-        // The column is nullable, but returning "" keeps the UI from having to
-        // null-check a value it only ever renders.
+        // Returning "" instead of null means the UI does not need a null check.
         assertEquals("", Excerpts.from(null));
         assertEquals("", Excerpts.from("   "));
     }
@@ -40,7 +40,7 @@ class ExcerptsTest {
 
         assertTrue(excerpt.endsWith("..."), "expected an ellipsis, got: " + excerpt);
         assertTrue(excerpt.length() <= 30, "excerpt exceeded the limit: " + excerpt.length());
-        // The cut must not land mid-word.
+        // The text must not be cut in the middle of a word.
         assertFalse(excerpt.contains("charl..."), "cut mid-word: " + excerpt);
     }
 
@@ -60,8 +60,7 @@ class ExcerptsTest {
     void respectsColumnWidth() {
         String body = "word ".repeat(1000);
 
-        // Asking for more than the column allows must still produce something
-        // the database will accept.
+        // Even if we ask for 10 000 characters, the result must fit the column.
         String excerpt = Excerpts.from(body, 10_000);
 
         assertTrue(excerpt.length() <= Excerpts.MAX_LENGTH,

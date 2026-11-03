@@ -1,6 +1,6 @@
 package org.example.bloggingplatformi.model;
 
-/** Mirrors the {@code ck_posts_status} CHECK constraint. */
+/** The status of a post. These match the values allowed by the database check. */
 public enum PostStatus {
     DRAFT,
     PUBLISHED,
@@ -13,10 +13,7 @@ public enum PostStatus {
         return PostStatus.valueOf(value.trim().toUpperCase());
     }
 
-    /**
-     * Only PUBLISHED posts carry a publication date; the
-     * {@code ck_posts_published_at} constraint enforces it in the database.
-     */
+    /** Only PUBLISHED posts have a published date. The database checks this too. */
     public boolean requiresPublishedAt() {
         return this == PUBLISHED;
     }

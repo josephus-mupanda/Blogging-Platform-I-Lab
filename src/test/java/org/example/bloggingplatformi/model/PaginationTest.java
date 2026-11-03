@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/** Tests for Page (page counts and next/previous) and the paging rules in PostFilter. */
 class PaginationTest {
 
     @Test
@@ -52,19 +53,6 @@ class PaginationTest {
     }
 
     @Test
-    @DisplayName("mapping preserves the paging metadata")
-    void mapKeepsMetadata() {
-        Page<Integer> source = new Page<>(List.of(1, 2, 3), 1, 20, 97);
-
-        Page<String> mapped = source.map(String::valueOf);
-
-        assertEquals(List.of("1", "2", "3"), mapped.content());
-        assertEquals(1, mapped.pageNumber());
-        assertEquals(97, mapped.totalElements());
-        assertEquals(5, mapped.totalPages());
-    }
-
-    @Test
     @DisplayName("PostFilter clamps the page size so one request cannot pull the whole table")
     void clampsPageSize() {
         assertEquals(PostFilter.MAX_PAGE_SIZE,
@@ -83,8 +71,8 @@ class PaginationTest {
     @Test
     @DisplayName("changing a filter resets to page zero")
     void changingFilterResetsPage() {
-        // Keeping the page number while changing the filter usually lands past
-        // the end of the new result set, which reads to the user as "no results".
+        // The old page number could be past the end of the new results,
+        // and the user would see an empty page.
         PostFilter deep = PostFilter.all().withPage(7);
 
         assertEquals(0, deep.withKeyword("index").pageNumber());
@@ -114,8 +102,8 @@ class PaginationTest {
     @Test
     @DisplayName("every sort option tie-breaks on post_id")
     void everySortIsDeterministic() {
-        // Without a unique tie-break, two rows sharing a timestamp can swap
-        // between page one and page two, so paging drops and repeats rows.
+        // Rows with the same date could swap between pages. Sorting by post_id
+        // last keeps the order fixed.
         for (PostSort sort : PostSort.values()) {
             assertTrue(sort.sqlFragment().contains("post_id"),
                     sort + " has no tie-break column, so paging is not stable");

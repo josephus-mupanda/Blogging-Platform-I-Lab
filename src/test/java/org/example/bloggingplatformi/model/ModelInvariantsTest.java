@@ -14,9 +14,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Checks that the model types enforce the same rules the database does, so a
- * bad value fails in Java with a clear message rather than as a constraint
- * violation three layers down.
+ * Checks that the model classes follow the same rules as the database constraints,
+ * so a bad value fails early in Java with a clear message.
  */
 class ModelInvariantsTest {
 
@@ -90,8 +89,7 @@ class ModelInvariantsTest {
         @Test
         @DisplayName("a reply extends its parent's path and depth")
         void replyInheritsPath() {
-            // This is the materialized path that makes a subtree read one
-            // indexed prefix match instead of a recursive walk.
+            // The path lists the ancestor ids, so a reply tree can be found with one prefix match.
             Comment root = Comment.newRoot(42, 7L, "ada", "Question?").withId("aaa");
             Comment reply = Comment.newReply(root, 8L, "grace", "Answer.");
 
@@ -115,8 +113,7 @@ class ModelInvariantsTest {
         @Test
         @DisplayName("replying to an unsaved comment is rejected")
         void cannotReplyToUnsavedComment() {
-            // Without an id there is no path segment to extend, and the reply
-            // would be silently misplaced in the thread.
+            // The parent has no id yet, so there is nothing to add to the reply's path.
             Comment unsaved = Comment.newRoot(42, 7L, "ada", "Not saved yet.");
 
             assertThrows(IllegalArgumentException.class,
@@ -126,8 +123,7 @@ class ModelInvariantsTest {
         @Test
         @DisplayName("a null author renders as a deleted user, not as a blank")
         void orphanedCommentsRenderSafely() {
-            // comments.author_id is ON DELETE SET NULL precisely so the thread
-            // survives the account.
+            // comments.author_id is set to NULL when the user is deleted, so the comment stays.
             Comment orphan = new Comment("1", 42, null, null, null, "/", 0,
                     "Still here.", CommentStatus.VISIBLE, Map.of(), null, null);
 

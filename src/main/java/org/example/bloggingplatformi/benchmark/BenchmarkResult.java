@@ -6,12 +6,8 @@ import java.util.Locale;
 /**
  * The timings from one benchmarked operation, in milliseconds.
  *
- * <p><b>The median is the headline, not the mean.</b> A JVM benchmark's
- * outliers are not noise to be averaged in: a garbage collection pause or a
- * JIT recompilation can make one iteration ten times slower than the rest, and
- * a mean reports that artefact as though it were the cost of the operation.
- * The median ignores it. The mean and the maximum are kept alongside so the
- * spread is visible rather than hidden.
+ * We report the median, because one slow run (for example a GC pause) can pull
+ * the mean up a lot. The mean and max are kept too, so the spread is visible.
  */
 public record BenchmarkResult(
         String name,
@@ -30,10 +26,9 @@ public record BenchmarkResult(
             "operation,variant,iterations,median_ms,mean_ms,min_ms,max_ms,p95_ms";
 
     /**
-     * Builds a result from raw per-iteration timings in nanoseconds.
+     * Builds a result from the time of each run, in nanoseconds.
      *
-     * @param checksum a value derived from the work, kept so the JIT cannot
-     *                 prove the computation unused and eliminate it entirely
+     * @param checksum a value from the work, so the JIT cannot remove it
      */
     public static BenchmarkResult from(String name, String variant, long[] nanos, long checksum) {
         long[] sorted = nanos.clone();
@@ -57,13 +52,12 @@ public record BenchmarkResult(
         if (sorted.length == 1) {
             return sorted[0];
         }
-        // Nearest-rank, clamped. Exact interpolation would imply a precision
-        // these sample sizes do not have.
+        // Nearest-rank method: pick the value at that position, kept inside the array.
         int rank = (int) Math.ceil(percentile / 100.0 * sorted.length) - 1;
         return sorted[Math.max(0, Math.min(sorted.length - 1, rank))];
     }
 
-    /** How many times faster {@code this} is than {@code baseline}, by median. */
+    /** How many times faster this result is than the baseline, using the median. */
     public double speedupOver(BenchmarkResult baseline) {
         return medianMs == 0 ? Double.POSITIVE_INFINITY : baseline.medianMs / medianMs;
     }
@@ -74,14 +68,14 @@ public record BenchmarkResult(
     }
 
     private static String escape(String value) {
-        // A comma or quote in a label would otherwise shift every later column.
+        // Quote labels that contain a comma or quote, or the CSV columns would shift.
         if (value.contains(",") || value.contains("\"")) {
             return "\"" + value.replace("\"", "\"\"") + "\"";
         }
         return value;
     }
 
-    /** One aligned line, for reading in a terminal. */
+    /** One table row for printing in the terminal. */
     public String toDisplayRow() {
         return String.format(Locale.ENGLISH, "%-38s %-14s %7d  %9.3f  %9.3f  %9.3f",
                 truncate(name, 38), truncate(variant, 14), iterations, medianMs, meanMs, maxMs);

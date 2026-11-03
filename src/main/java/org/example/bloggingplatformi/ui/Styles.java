@@ -23,11 +23,9 @@ import org.example.bloggingplatformi.model.PostStatus;
 import org.example.bloggingplatformi.model.Role;
 
 /**
- * Shared view helpers: stylesheet wiring, the small building blocks every
- * screen reuses, and the formatters that keep dates and numbers consistent.
- *
- * <p>Keeping badge and avatar construction here rather than in each view is
- * what stops the same concept being drawn three slightly different ways.
+ * Shared helpers for the views: loading the stylesheet, small UI building blocks
+ * like labels and badges, and date and number formatting.
+ * Keeping them in one place makes every screen look the same.
  */
 public final class Styles {
 
@@ -52,7 +50,7 @@ public final class Styles {
         }
     }
 
-    /** Dialogs have their own Parent and do not inherit the scene's sheet. */
+    /** Dialogs do not get the scene's stylesheet, so it is added to them here. */
     public static void apply(Parent parent) {
         String url = resolve();
         if (url != null && !parent.getStylesheets().contains(url)) {
@@ -63,8 +61,7 @@ public final class Styles {
     private static String resolve() {
         URL url = Styles.class.getResource(STYLESHEET);
         if (url == null) {
-            // Not fatal: the application is perfectly usable unstyled, and
-            // failing to start over a missing stylesheet would be worse.
+            // The app still works without styles, so we only log this.
             System.err.println("Stylesheet not found on the classpath: " + STYLESHEET);
             return null;
         }
@@ -94,13 +91,8 @@ public final class Styles {
     }
 
     /**
-     * A message shown inside a panel: an empty state, or an error.
-     *
-     * <p>Always wrapping. An unwrapped label takes its full single-line
-     * preferred width, which for a multi-sentence error is wider than the
-     * panel, so the panel grows, its row overflows and the window gains a
-     * horizontal scrollbar. {@code USE_PREF_SIZE} then stops the wrapped
-     * height being clipped back to one line.
+     * A message shown inside a panel, such as an empty state or an error.
+     * The text wraps so a long message does not make the panel too wide.
      */
     public static Label message(String text) {
         Label label = label(text, "text-small");
@@ -128,16 +120,12 @@ public final class Styles {
     }
 
     /**
-     * A horizontal bar filled to {@code ratio} of its track.
+     * A horizontal bar filled to {@code ratio} of its width.
+     * The fill's max width is bound to the track width, because a StackPane
+     * would otherwise stretch the fill to full width.
      *
-     * <p>The fill's <em>maximum</em> width is bound to a fraction of the
-     * track's actual width. Setting only a preferred width does nothing here:
-     * a StackPane stretches a resizable child up to its maximum, which for a
-     * Region is unbounded, so every bar used to render full regardless of its
-     * value - a tag used once looked identical to one used 125 times.
-     *
-     * @param ratio     0..1; clamped, and NaN is treated as zero
-     * @param prefWidth the track's preferred width; it still grows with the row
+     * @param ratio     a value from 0 to 1; NaN counts as 0
+     * @param prefWidth the preferred width of the bar
      */
     public static StackPane proportionBar(double ratio, double prefWidth) {
         double clamped = Double.isNaN(ratio) ? 0 : Math.max(0, Math.min(1, ratio));
@@ -152,8 +140,7 @@ public final class Styles {
         track.setMinWidth(40);
         HBox.setHgrow(track, Priority.ALWAYS);
 
-        // Zero draws nothing: a stub would read as "a little". Anything above
-        // zero gets at least a few pixels so it stays visible.
+        // Zero shows no fill. Any value above zero gets at least 4 pixels so it stays visible.
         fill.setVisible(clamped > 0);
         fill.setMinWidth(0);
         fill.maxWidthProperty().bind(javafx.beans.binding.Bindings.createDoubleBinding(
@@ -178,7 +165,7 @@ public final class Styles {
         return box;
     }
 
-    /** A circle of initials. Cheap, always available, and never a broken image. */
+    /** A circle with the user's initials, used instead of a profile picture. */
     public static StackPane avatar(String name, boolean small) {
         StackPane pane = new StackPane(new Label(initials(name)));
         pane.getStyleClass().add("avatar");
@@ -209,7 +196,7 @@ public final class Styles {
         return badge;
     }
 
-    /** Colour carries the meaning: green is live, grey is not yet, amber is retired. */
+    /** Green for published, grey for draft, amber for archived. */
     public static Label statusBadge(PostStatus status) {
         return switch (status) {
             case PUBLISHED -> badge("Published", "success");
@@ -251,10 +238,7 @@ public final class Styles {
                 : value.atZoneSameInstant(ZoneId.systemDefault()).format(DATE_TIME);
     }
 
-    /**
-     * "3 days ago" reads faster than a date in an activity feed, but an exact
-     * date is better once something is older than a month.
-     */
+    /** Formats a time like "3 days ago". Anything older than a month shows the date instead. */
     public static String relative(OffsetDateTime value) {
         if (value == null) {
             return "—";
@@ -277,7 +261,7 @@ public final class Styles {
         return formatDate(value);
     }
 
-    /** Thousands separators, so 12 847 does not read as 1 284 7. */
+    /** Formats a number with thousands separators, for example 12,847. */
     public static String number(long value) {
         return String.format(Locale.ENGLISH, "%,d", value);
     }

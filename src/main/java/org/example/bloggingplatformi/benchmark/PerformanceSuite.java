@@ -46,31 +46,14 @@ import org.example.bloggingplatformi.model.Post;
 import org.example.bloggingplatformi.model.PostFilter;
 
 /**
- * The Phase 4 measurements, end to end, against the benchmark database.
+ * Runs all the performance tests against the benchmark database and writes
+ * the results as CSV files to docs/benchmarks/. Run with mvn javafx:run@bench.
  *
- * <p>Run with {@code mvn javafx:run@bench} after building the benchmark data
- * (see {@code docs/02-performance-report.md}, "Reproducing"). Every number in
- * that report comes from a CSV this class writes to {@code docs/benchmarks/};
- * none is typed in by hand.
+ * Sections: 1. indexes (with and without), 2. full-text search, 3. OFFSET vs
+ * keyset pagination, 4. LRU cache vs no cache, 5. in-memory algorithms,
+ * 6. PostgreSQL vs MongoDB on the same data.
  *
- * <p>Sections:
- * <ol>
- *   <li><b>Indexes</b> - each query timed with the V2 indexes dropped, then
- *       created, with the {@code EXPLAIN ANALYZE} plan of both kept.</li>
- *   <li><b>Full-text</b> - the search expression the DAO used against the one
- *       the index was built on.</li>
- *   <li><b>Pagination</b> - OFFSET against keyset at increasing depth.</li>
- *   <li><b>Cache</b> - the LRU decorator against the bare DAO, on a skewed
- *       workload.</li>
- *   <li><b>DSA</b> - inverted index, hashing, merge sort and binary search
- *       against their naive alternatives, in memory.</li>
- *   <li><b>SQL vs NoSQL</b> - the same comment and review workloads through
- *       both implementations, on identical data.</li>
- * </ol>
- *
- * <p>Timings are warm (data in the buffer cache, JIT compiled), single client,
- * against servers on localhost. They measure query execution plus one local
- * round trip, not a networked production deployment.
+ * All timings are warm, with one client, on localhost.
  */
 public final class PerformanceSuite {
 
@@ -82,11 +65,11 @@ public final class PerformanceSuite {
     private static final List<String> TITLE_QUERIES =
             List.of("eviction", "bloom filters", "keyset pagination", "deadlock detection");
 
-    /** The expression {@code JdbcPostDao} used until this suite showed it never hit the index. */
+    /** An older search expression that does not match the index, so the index is not used. */
     private static final String FTS_OLD_EXPRESSION =
             "to_tsvector('english', p.title || ' ' || p.body)";
 
-    /** Character for character the expression {@code idx_posts_search_tsv} is built on. */
+    /** Exactly the same expression idx_posts_search_tsv is built on, so the index is used. */
     private static final String FTS_INDEXED_EXPRESSION =
             "(setweight(to_tsvector('english', coalesce(p.title, '')), 'A') || "
           + "setweight(to_tsvector('english', coalesce(p.body, '')), 'B'))";
@@ -97,7 +80,7 @@ public final class PerformanceSuite {
     private final Random random = new Random(SEED);
     private final List<String> planRows = new ArrayList<>();
 
-    // Parameter pools, sampled once so every variant sees the same inputs.
+    // Test inputs, picked once so every variant uses the same values.
     private List<Long> authorIds;
     private List<String> titles;
     private List<Integer> tagIds;
@@ -183,7 +166,7 @@ public final class PerformanceSuite {
         System.out.println(BenchmarkResult.displayHeader());
     }
 
-    /** Dropping indexes on the demo database would be a nasty surprise. */
+    /** Stops the run unless we are on the benchmark databases, because the suite drops indexes. */
     private void guardAgainstDemoDatabase() {
         String name = scalar("SELECT current_database()");
         if (!name.contains("bench")) {
@@ -276,15 +259,13 @@ public final class PerformanceSuite {
         explain("fts_old_dao_expression", phase, oldSql, pick(rareTerms, 0));
         explain("fts_index_expression", phase, newSql, pick(rareTerms, 0));
 
-        // Without a usable index each of these computes a tsvector for every
-        // one of 100 000 posts, so they get fewer iterations.
+        // Without the index these scan all 100 000 posts, so we run them fewer times.
         time(bench, "fts_old_dao_expression", phase, 1, 5, i -> query(oldSql, pick(rareTerms, i)));
         boolean fast = phase.equals("indexed");
         time(bench, "fts_index_expression", phase, fast ? 3 : 1, fast ? 21 : 5,
                 i -> query(newSql, pick(rareTerms, i)));
 
-        // The application path: JdbcPostDao.search runs a COUNT and a page
-        // query, title ILIKE OR full-text, exactly as the post list does.
+        // The real search the post list uses: a COUNT plus one page of results.
         JdbcPostDao posts = new JdbcPostDao();
         time(bench, "dao_search_keyword", phase, fast ? 3 : 1, fast ? 21 : 5,
                 i -> posts.search(PostFilter.all().withKeyword(pick(rareTerms, i))).totalElements());
@@ -307,7 +288,7 @@ public final class PerformanceSuite {
             time(bench, label, "OFFSET", 3, 21, i -> query(offsetSql, depth));
 
             if (depth == 0) {
-                // The first page has no cursor; keyset and OFFSET 0 are the same query.
+                // The first page has no cursor, so keyset is the same as OFFSET 0.
                 time(bench, label, "keyset", 3, 21, i -> query(offsetSql, 0));
                 continue;
             }
@@ -352,8 +333,8 @@ public final class PerformanceSuite {
         JdbcPostDao jdbc = new JdbcPostDao();
         CachedPostDao cached = new CachedPostDao(jdbc, 200);
 
-        // A skewed workload, as real traffic is: 80% of reads go to a hot set
-        // of 100 posts, the rest are spread over all 100 000.
+        // Like real traffic, 80% of reads go to 100 popular posts.
+        // The rest are spread over all 100 000.
         long[] hot = random.longs(100, 1, 100_001).toArray();
         long[] workload = new long[2_000];
         for (int i = 0; i < workload.length; i++) {
@@ -509,7 +490,7 @@ public final class PerformanceSuite {
         return index;
     }
 
-    /** Whole-word, case-insensitive AND match: the same semantics as the index. */
+    /** Counts titles that contain all the query words, the slow way. Same rules as the index. */
     private static long scanCount(List<Row> rows, String query) {
         List<String> terms = InvertedIndex.tokenize(query);
         long count = 0;
@@ -535,7 +516,7 @@ public final class PerformanceSuite {
 
         Map<Long, String> objectIds = mongoIdsFor(concat(parentCommentIds, subtreeRootIds));
 
-        // Same answers before same timings: a fast wrong answer is not a win.
+        // First check both databases give the same answers, then time them.
         for (Long postId : threadPostIds.subList(0, 10)) {
             List<String> sqlBodies = sqlComments.findByPostId(postId, false).stream().map(Comment::body).toList();
             List<String> docBodies = docComments.findByPostId(postId, false).stream().map(Comment::body).toList();
@@ -571,8 +552,7 @@ public final class PerformanceSuite {
             time(bench, "moderation_queue_50", store.name(), 5, 51,
                     i -> store.comments().findForModeration(50));
 
-            // Writes: insert roots, then delete exactly those, so the dataset
-            // is unchanged afterwards.
+            // Insert comments, then delete the same ones, so the data is unchanged afterwards.
             List<String> inserted = new ArrayList<>();
             time(bench, "insert_comment", store.name(), 5, 51, i -> {
                 String id = store.comments().insert(Comment.newRoot(
@@ -587,8 +567,8 @@ public final class PerformanceSuite {
                 store.comments().deleteWithReplies(inserted.get(next.getAndIncrement()));
             }
 
-            // The denormalized author name: free in SQL (read by join), a
-            // multi-document write in MongoDB.
+            // MongoDB copies the author name into each comment, so a rename updates many documents.
+            // SQL reads the name with a join, so it is cheap there.
             time(bench, "rename_author", store.name(), 2, 21, i -> {
                 long author = pick(authorIds, i % 10);
                 String name = ((i / 10) % 2 == 0) ? "Bench User " + author + " (renamed)" : "Bench User " + author;
@@ -602,7 +582,7 @@ public final class PerformanceSuite {
         bench.writeCsv(out.resolve("sql-vs-nosql.csv"));
     }
 
-    /** Maps relational comment ids to the ObjectIds of their MongoDB copies. */
+    /** Maps PostgreSQL comment ids to the ObjectIds of their MongoDB copies. */
     private static Map<Long, String> mongoIdsFor(List<Long> sqlIds) {
         Map<Long, String> ids = new HashMap<>();
         for (Document doc : MongoProvider.comments().find(Filters.in("sqlId", sqlIds))) {
@@ -645,7 +625,7 @@ public final class PerformanceSuite {
     private void sampleParameters() {
         Database.withConnection(connection -> {
             try (Statement st = connection.createStatement()) {
-                // Same seed, same samples, on every run.
+                // A fixed seed gives the same random samples on every run.
                 st.execute("SELECT setseed(0.5)");
             }
             authorIds = longs(connection, "SELECT DISTINCT author_id FROM posts ORDER BY author_id LIMIT 4999", 50);
@@ -673,7 +653,7 @@ public final class PerformanceSuite {
         commentKeywords = random.ints(20, 0, 5000).mapToObj(n -> String.format("kw%04d", n)).toList();
     }
 
-    /** Takes a random {@code size}-element sample from the rows a query returns. */
+    /** Runs the query and returns a random sample of up to size ids. */
     private List<Long> longs(Connection connection, String sql, int size) throws SQLException {
         List<Long> all = new ArrayList<>();
         try (PreparedStatement ps = connection.prepareStatement(sql); ResultSet rs = ps.executeQuery()) {
@@ -722,7 +702,7 @@ public final class PerformanceSuite {
     private record IndexDefinition(String name, String sql) {
     }
 
-    /** The index set, read from V2__indexes.sql so the benchmark cannot drift from it. */
+    /** Reads the index list from V2__indexes.sql, so it always matches the real schema. */
     private List<IndexDefinition> indexDefinitions() {
         try {
             StringBuilder code = new StringBuilder();
@@ -831,7 +811,7 @@ public final class PerformanceSuite {
         }
     }
 
-    /** Saves the plan and records which nodes it used and how long it took. */
+    /** Runs EXPLAIN ANALYZE, saves the plan to a file, and records its steps and time. */
     private void explain(String scenario, String phase, String sql, Object... params) {
         List<String> lines = Database.withConnection(connection -> {
             try (PreparedStatement ps = connection.prepareStatement("EXPLAIN (ANALYZE, BUFFERS) " + sql)) {

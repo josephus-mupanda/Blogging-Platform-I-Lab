@@ -1,29 +1,22 @@
 // =====================================================================
-// Smart Blogging Platform - MongoDB collection design
-// Phase 1 / Epic 4 - User Story 4.2
+// Smart Blogging Platform: MongoDB collections with validation rules.
 //
 // Run as:  mongosh "mongodb://localhost:27017/blogging_platform" --file db/mongo/01-collections.js
 //
-// "Schemaless" does not mean "unvalidated". $jsonSchema gives rigidity
-// where the data needs it (postId, rating, body) while leaving the
-// genuinely open-ended fields (reactions, criteria, editHistory) free.
-// That combination is the actual argument for using a document store
-// here rather than a sparse SQL table.
+// $jsonSchema checks the fields that must be correct (postId, rating, body).
+// Flexible fields (reactions, criteria, editHistory) can hold any keys.
 // =====================================================================
 
-// The target database comes from the connection string in the mongosh
-// invocation, so `db` is already blogging_platform. Reassigning it with
-// `const db = db.getSiblingDB(...)` would throw: the new binding shadows
-// the global before the right-hand side can read it.
+// `db` already points at blogging_platform because of the connection string.
+// Do not write `const db = db.getSiblingDB(...)`: it throws an error.
 
 // ---------------------------------------------------------------------
 // comments
 //
-// Flat documents with a materialized path, NOT nested subdocuments.
-// Nesting replies inside their parent risks the 16 MB document ceiling on
-// a popular post and turns "edit one reply" into a whole-document rewrite.
-// The path ("/661f.../889a.../") makes a subtree read one indexed prefix
-// match while each comment stays independently updatable.
+// One document per comment, not replies nested inside their parent.
+// Nested replies could pass the 16 MB document limit on a busy post.
+// `path` lists the ancestor ids ("/661f.../889a.../"), so a whole reply
+// tree can be read with one prefix match on an index.
 // ---------------------------------------------------------------------
 db.createCollection('comments', {
   validator: {
@@ -82,9 +75,8 @@ db.createCollection('comments', {
 // ---------------------------------------------------------------------
 // reviews
 //
-// `criteria` is the clearest case for documents in this domain: an
-// optional, per-review-variable set of sub-scores. The SQL equivalent is
-// either a wide sparse table or an EAV side table.
+// `criteria` holds optional sub-scores, and the keys can differ per review.
+// In SQL this would need many mostly empty columns or an extra table.
 // ---------------------------------------------------------------------
 db.createCollection('reviews', {
   validator: {

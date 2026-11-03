@@ -15,7 +15,7 @@ import org.example.bloggingplatformi.db.Database;
 import org.example.bloggingplatformi.model.Tag;
 import org.example.bloggingplatformi.util.Slugs;
 
-/** JDBC implementation of {@link TagDao}. */
+/** TagDao for PostgreSQL, using JDBC. */
 public class JdbcTagDao implements TagDao {
 
     private static final String COLUMNS = "tag_id, name, slug, created_at";
@@ -40,8 +40,7 @@ public class JdbcTagDao implements TagDao {
         if (name == null || name.isBlank()) {
             return Optional.empty();
         }
-        // LOWER(name) = ? rather than = LOWER(?): names are already stored
-        // lower-case, and this is the expression idx_tags_name_lower indexes.
+        // The name is lower-cased in Java. LOWER(name) matches the idx_tags_name_lower index.
         String sql = "SELECT " + COLUMNS + " FROM tags WHERE LOWER(name) = ?";
         return Database.withConnection(connection -> {
             try (PreparedStatement ps = connection.prepareStatement(sql)) {
@@ -57,7 +56,8 @@ public class JdbcTagDao implements TagDao {
 
     @Override
     public List<Tag> findAll() {
-        String sql = "SELECT " + COLUMNS + " FROM tags ORDER BY name";
+        // No ORDER BY: TagService sorts the list with its own merge sort.
+        String sql = "SELECT " + COLUMNS + " FROM tags";
         return Database.withConnection(connection -> {
             try (PreparedStatement ps = connection.prepareStatement(sql)) {
                 return mapAll(ps);
@@ -91,9 +91,8 @@ public class JdbcTagDao implements TagDao {
         if (prefix == null || prefix.isBlank()) {
             return List.of();
         }
-        // A trailing-wildcard LIKE on a lower-cased column is a range scan,
-        // which idx_tags_name_lower serves directly. The escape call stops a
-        // literal % or _ in the input from turning into a wildcard.
+        // "prefix%" can use the idx_tags_name_lower index.
+        // escapeLike stops a % or _ typed by the user from acting as a wildcard.
         String sql = "SELECT " + COLUMNS + """
                  FROM tags
                  WHERE LOWER(name) LIKE ? ESCAPE '\\'
@@ -125,7 +124,7 @@ public class JdbcTagDao implements TagDao {
             try (PreparedStatement ps = connection.prepareStatement(sql)) {
                 ps.setInt(1, Math.max(1, limit));
                 try (ResultSet rs = ps.executeQuery()) {
-                    // LinkedHashMap, because the ORDER BY is the point of the query.
+                    // LinkedHashMap keeps the order from the ORDER BY.
                     Map<String, Long> counts = new LinkedHashMap<>();
                     while (rs.next()) {
                         counts.put(rs.getString("name"), rs.getLong("post_count"));
@@ -171,11 +170,9 @@ public class JdbcTagDao implements TagDao {
     public int findOrCreate(String name) {
         String normalized = name.strip().toLowerCase(Locale.ROOT);
 
-        // ON CONFLICT makes this a single atomic statement. A read-then-insert
-        // would race: two editors adding "java" at the same moment would both
-        // see it missing and the second insert would fail on uq_tags_name.
-        // The second RETURNING clause covers the conflict case, where
-        // ON CONFLICT DO NOTHING returns no row at all.
+        // One statement, so two users adding the same tag at once cannot clash.
+        // If the tag already exists, the insert returns nothing and the second
+        // SELECT finds the existing id.
         String sql = """
                 WITH inserted AS (
                     INSERT INTO tags (name, slug) VALUES (?, ?)
@@ -217,7 +214,7 @@ public class JdbcTagDao implements TagDao {
         });
     }
 
-    /** Escapes LIKE metacharacters so user input cannot act as a wildcard. */
+    /** Escapes \, % and _ so they are matched as normal characters in LIKE. */
     private static String escapeLike(String input) {
         return input.replace("\\", "\\\\")
                     .replace("%", "\\%")

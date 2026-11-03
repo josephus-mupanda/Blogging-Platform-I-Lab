@@ -15,7 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Correctness tests for the Phase 4 data structures and algorithms. */
+/** Tests for merge sort, binary search and the inverted index. */
 class AlgorithmsTest {
 
     @Nested
@@ -44,8 +44,8 @@ class AlgorithmsTest {
         @Test
         @DisplayName("handles empty, single and null input")
         void handlesDegenerateInput() {
-            // Explicit type witnesses: with an empty or null list there is no
-            // element for the compiler to infer T from.
+            // An empty or null list gives the compiler no element type,
+            // so <Integer> is written out.
             assertEquals(List.of(),
                     Sorting.<Integer>mergeSort(List.of(), Comparator.naturalOrder()));
             assertEquals(List.of(1),
@@ -57,9 +57,8 @@ class AlgorithmsTest {
         @Test
         @DisplayName("is stable: equal elements keep their original order")
         void isStable() {
-            // Stability is why merge sort was chosen. Two posts sharing a
-            // timestamp must not swap places between renders, or paging
-            // appears to duplicate and drop rows.
+            // Two posts with the same date must not swap places,
+            // or a row could show up twice across pages.
             record Entry(String key, int order) { }
 
             List<Entry> input = List.of(
@@ -83,8 +82,7 @@ class AlgorithmsTest {
         @Test
         @DisplayName("crosses the insertion-sort threshold correctly")
         void correctAroundThreshold() {
-            // The small-array branch is a separate code path; sizes either
-            // side of the cutover have to agree with the library sort.
+            // Small lists use insertion sort. Test sizes on both sides of that limit.
             for (int size : new int[]{1, 11, 12, 13, 24, 100}) {
                 List<Integer> input = descending(size);
 
@@ -118,9 +116,7 @@ class AlgorithmsTest {
         @Test
         @DisplayName("handles already-sorted and reversed input")
         void handlesPreSortedInput() {
-            // descending(200) counts down from 200 to 1, so its sorted form is
-            // 1..200 — built here rather than assumed, which is what the first
-            // version of this test got wrong.
+            // descending(200) counts down from 200 to 1. The expected list is sorted here.
             List<Integer> reversed = descending(200);
             List<Integer> expected = new ArrayList<>(reversed);
             Collections.sort(expected);
@@ -165,8 +161,7 @@ class AlgorithmsTest {
         @Test
         @DisplayName("returns the insertion point for an absent element")
         void returnsInsertionPoint() {
-            // Matching Collections.binarySearch exactly, so the two are
-            // interchangeable in a benchmark.
+            // Same result as Collections.binarySearch: -(insertion point) - 1.
             assertEquals(-(0) - 1, Sorting.binarySearch(sorted, 0, Comparator.<Integer>naturalOrder()));
             assertEquals(-(1) - 1, Sorting.binarySearch(sorted, 2, Comparator.<Integer>naturalOrder()));
             assertEquals(-(8) - 1, Sorting.binarySearch(sorted, 99, Comparator.<Integer>naturalOrder()));
@@ -187,8 +182,8 @@ class AlgorithmsTest {
                 int mine = Sorting.binarySearch(values, key, Comparator.<Integer>naturalOrder());
                 int theirs = Collections.binarySearch(values, key);
 
-                // With duplicates the two may land on different indices, so
-                // the contract is agreement on presence and on insertion point.
+                // With duplicates the index can differ, so compare the
+                // values found, or the insertion point when missing.
                 if (theirs >= 0) {
                     assertTrue(mine >= 0, "key " + key + " present but not found");
                     assertEquals(values.get(theirs), values.get(mine));
@@ -208,7 +203,7 @@ class AlgorithmsTest {
         @Test
         @DisplayName("lowerBound finds the first of a run of duplicates")
         void lowerBoundFindsFirstDuplicate() {
-            // binarySearch may return any match; a range query needs the first.
+            // binarySearch can return any of the 2s. lowerBound must return the first one.
             List<Integer> withDuplicates = List.of(1, 2, 2, 2, 2, 3, 4);
 
             assertEquals(1, Sorting.lowerBound(withDuplicates, 2, Comparator.<Integer>naturalOrder()));
@@ -279,8 +274,7 @@ class AlgorithmsTest {
         @Test
         @DisplayName("stop words are not indexed")
         void stopWordsExcluded() {
-            // "and" appears in every document; indexing it costs memory and
-            // returns everything, which is the opposite of selective.
+            // Common words like "and" would match every document, so they are skipped.
             assertTrue(indexed().lookup("and").isEmpty());
             assertTrue(indexed().lookup("the").isEmpty());
         }
@@ -298,8 +292,7 @@ class AlgorithmsTest {
         @Test
         @DisplayName("re-adding a document replaces its old terms")
         void reAddingReplacesTerms() {
-            // Without this an edited title keeps matching words it no longer
-            // contains, which is a silently wrong search result.
+            // An edited title should no longer match its old words.
             InvertedIndex index = new InvertedIndex();
             index.add(1, "original title about caching");
             index.add(1, "replacement title about indexing");
@@ -348,9 +341,7 @@ class AlgorithmsTest {
         @Test
         @DisplayName("the index agrees with a linear scan over many documents")
         void agreesWithLinearScan() {
-            // The index is only worth having if it returns what scanning
-            // would. This is that guarantee, over a corpus big enough to be
-            // a real test rather than a demonstration.
+            // The index must return the same documents as checking each one by hand.
             Random random = new Random(11);
             String[] vocabulary = {"alpha", "bravo", "charlie", "delta", "echo",
                                    "foxtrot", "golf", "hotel", "india", "juliet"};

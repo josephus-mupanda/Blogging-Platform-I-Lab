@@ -6,17 +6,9 @@ import org.example.bloggingplatformi.db.Database;
 import org.example.bloggingplatformi.db.MongoProvider;
 
 /**
- * Detects whether the databases are reachable, so integration tests can skip
- * instead of fail when they are not.
- *
- * <p>A skipped test is honest about what was and was not verified. A test that
- * fails because nothing is running trains everyone to ignore red builds, and a
- * test that silently passes without touching a database verifies nothing at
- * all. JUnit's assumption mechanism reports these as skipped, which is the
- * accurate answer.
- *
- * <p>The result is cached: probing a dead port costs the connection timeout,
- * and paying that once per test class is already enough.
+ * Checks if PostgreSQL and MongoDB are running, so integration tests can be
+ * skipped instead of failing when they are not.
+ * The answer is saved after the first check, because a failed check waits for a timeout.
  */
 public final class Databases {
 

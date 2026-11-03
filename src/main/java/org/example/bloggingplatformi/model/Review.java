@@ -5,16 +5,9 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * A review: a 1-5 rating plus optional prose.
- *
- * <p>Like {@link Comment}, the identifier is a {@code String} so the same
- * record serves the relational and document implementations.
- *
- * <p>{@code criteria} holds optional per-review sub-scores (clarity, depth,
- * accuracy, and so on). The set of keys varies from one review to the next,
- * which in SQL means a wide sparse table or an EAV side table, and in a
- * document is simply a field. It is the clearest argument in this domain for
- * the document model; the JDBC implementation returns it empty.
+ * A review: a rating from 1 to 5, with an optional headline and text.
+ * The id is a String so it works for both PostgreSQL and MongoDB.
+ * The criteria map holds optional sub-scores. Only MongoDB stores it.
  */
 public record Review(
         String reviewId,
@@ -34,7 +27,7 @@ public record Review(
     public static final int MAX_RATING = 5;
 
     public Review {
-        // Mirrors CHECK (rating BETWEEN 1 AND 5) and the Mongo validator.
+        // Same rule as the rating check in both databases.
         if (rating < MIN_RATING || rating > MAX_RATING) {
             throw new IllegalArgumentException(
                     "rating must be between " + MIN_RATING + " and " + MAX_RATING + ", was " + rating);
@@ -45,7 +38,7 @@ public record Review(
         criteria = (criteria == null) ? Map.of() : Map.copyOf(criteria);
     }
 
-    /** A new, not-yet-persisted review. */
+    /** A new review, not yet saved. */
     public static Review of(long postId, long reviewerId, String reviewerName,
                             int rating, String headline, String body) {
         return new Review(null, postId, reviewerId, reviewerName, rating, headline, body,
@@ -71,15 +64,12 @@ public record Review(
                 newBody, criteria, helpfulVotes, createdAt, updatedAt);
     }
 
-    /** Convenience for the UI: a 1-5 rating as stars. */
+    /** The rating as stars, for example 3 becomes ★★★☆☆. */
     public String stars() {
-        // U+2605/U+2606. The rating-distribution rows already render U+2605 in
-        // the UI font; the ASCII stand-in only existed because the monospace
-        // style once fell through to a symbol face.
         return "★".repeat(rating) + "☆".repeat(MAX_RATING - rating);
     }
 
-    /** Objects.requireNonNull on the name keeps the denormalized copy honest. */
+    /** Throws if the reviewer name is missing, because the name is stored on the review. */
     public static Review requireNamed(Review review) {
         Objects.requireNonNull(review.reviewerName, "reviewerName");
         return review;

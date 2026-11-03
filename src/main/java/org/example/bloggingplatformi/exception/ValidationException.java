@@ -5,13 +5,8 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Carries field-level validation failures from the service layer to the UI.
- *
- * <p>Collecting every problem into one exception, rather than throwing on the
- * first, is what lets the Phase 3 form mark all of its bad inputs in a single
- * pass instead of making the user fix them one at a time.
- *
- * <p>Insertion order is preserved so the messages appear in field order.
+ * Holds all the input errors found by a service, one message per field.
+ * Sending them together lets the form mark every bad field at once.
  */
 public class ValidationException extends RuntimeException {
 
@@ -26,7 +21,7 @@ public class ValidationException extends RuntimeException {
         this(Map.of(field, message));
     }
 
-    /** Field name to human-readable message. Never empty. */
+    /** Maps each field name to its error message, in the order they were added. */
     public Map<String, String> getErrors() {
         return errors;
     }
@@ -41,20 +36,16 @@ public class ValidationException extends RuntimeException {
         return sb.toString();
     }
 
-    /**
-     * Accumulates problems, then throws only if any were found. Keeps the
-     * validate-then-throw pattern in the services down to a few lines.
-     */
+    /** Collects errors, then throws one ValidationException if there are any. */
     public static final class Collector {
         private final Map<String, String> errors = new LinkedHashMap<>();
 
-        /** Records a problem against a field. The first message for a field wins. */
+        /** Adds an error for a field. If the field already has one, the first is kept. */
         public Collector reject(String field, String message) {
             errors.putIfAbsent(field, message);
             return this;
         }
 
-        /** Records the problem only when {@code condition} holds. */
         public Collector rejectIf(boolean condition, String field, String message) {
             if (condition) {
                 reject(field, message);

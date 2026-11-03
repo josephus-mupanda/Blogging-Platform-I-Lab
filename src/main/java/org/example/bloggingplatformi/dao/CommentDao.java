@@ -10,30 +10,20 @@ import org.example.bloggingplatformi.model.Comment;
 import org.example.bloggingplatformi.model.CommentStatus;
 
 /**
- * Data access for comments, implemented twice: once over PostgreSQL
- * ({@link JdbcCommentDao}) and once over MongoDB ({@link MongoCommentDao}).
- *
- * <p>This interface is the centre of the Epic 4.2 comparison. Because both
- * stores sit behind the same contract, Phase 4 can run identical workloads
- * against each and report real timings instead of an argument about which
- * ought to be faster. The runtime choice comes from {@code app.comments.store}.
- *
- * <p>Two consequences of that symmetry are visible in the signatures:
- * identifiers are {@code String} (a {@code BIGSERIAL} on one side, an
- * {@code ObjectId} on the other), and no method accepts a JDBC
- * {@code Connection}, since one implementation has no such concept.
+ * Reads and writes comments. There are two versions: JdbcCommentDao (PostgreSQL)
+ * and MongoCommentDao (MongoDB), chosen by the app.comments.store setting.
+ * Ids are Strings because PostgreSQL uses a number and MongoDB uses an ObjectId.
  */
 public interface CommentDao {
 
-    /** Identifies the backing store, for benchmark labels and the UI status bar. */
+    /** Name of the store in use, shown in benchmark output and the status bar. */
     String storeName();
 
     Optional<Comment> findById(String commentId);
 
     /**
-     * One post's whole thread, ordered so that a parent always precedes its
-     * replies. The caller can render it by indenting on {@link Comment#depth()}
-     * without building a tree first.
+     * All comments on a post, with each parent before its replies.
+     * The UI can indent each one by its depth without building a tree.
      */
     List<Comment> findByPostId(long postId, boolean includeHidden);
 
@@ -41,27 +31,25 @@ public interface CommentDao {
     List<Comment> findReplies(String parentId);
 
     /**
-     * The comment and everything beneath it. Backed by a prefix match on the
-     * materialized path in MongoDB, and by a recursive CTE in PostgreSQL.
+     * The comment and all replies under it. MongoDB matches on the path prefix.
+     * PostgreSQL uses a recursive query.
      */
     List<Comment> findSubtree(String rootCommentId);
 
     List<Comment> findByAuthor(long authorId, int limit);
 
-    /** Case-insensitive keyword search across comment bodies. */
+    /** Searches comment bodies for a keyword, ignoring case. */
     List<Comment> search(String keyword, int limit);
 
-    /** The moderation queue: everything not VISIBLE. */
+    /** Comments waiting for moderation: everything that is not VISIBLE. */
     List<Comment> findForModeration(int limit);
 
     long countByPostId(long postId, boolean includeHidden);
 
     /**
-     * Visible-comment counts for a page of posts, in one round trip.
-     *
-     * <p>Posts with no comments may be absent from the map. The default loops
-     * over {@link #countByPostId}; the real stores override it with a single
-     * grouped query, so a twenty-row listing costs one query, not twenty.
+     * Visible comment counts for many posts at once.
+     * Posts with no comments may be missing from the map. Both stores override
+     * this default loop with one grouped query, so a page of 20 posts needs one query.
      */
     default Map<Long, Long> countVisibleByPostIds(Collection<Long> postIds) {
         Map<Long, Long> counts = new HashMap<>();
@@ -81,14 +69,11 @@ public interface CommentDao {
     boolean updateStatus(String commentId, CommentStatus status);
 
     /**
-     * Deletes the comment and every reply beneath it.
+     * Deletes the comment and all replies under it.
+     * PostgreSQL does this with ON DELETE CASCADE. MongoDB has no cascade,
+     * so that version deletes by path prefix.
      *
-     * <p>PostgreSQL does this through {@code ON DELETE CASCADE} on the
-     * self-referencing foreign key. MongoDB has no cascade, so the
-     * implementation deletes by path prefix; the outcome is the same, and the
-     * difference in effort is itself a finding for the Phase 4 write-up.
-     *
-     * @return the number of documents or rows removed
+     * @return how many comments were removed
      */
     long deleteWithReplies(String commentId);
 
@@ -96,12 +81,8 @@ public interface CommentDao {
     long deleteByPostId(long postId);
 
     /**
-     * Updates the denormalized author name wherever it appears.
-     *
-     * <p>Relational storage does not need this: the name lives in {@code users}
-     * and is reached by join. The document store copies it to avoid a
-     * cross-store lookup per comment, and that copy has to be maintained. The
-     * JDBC implementation is a no-op returning 0, which is the honest answer.
+     * Updates the author name stored on the author's comments.
+     * Only MongoDB keeps a copy of the name. The JDBC version does nothing and returns 0.
      */
     long renameAuthor(long authorId, String newDisplayName);
 }

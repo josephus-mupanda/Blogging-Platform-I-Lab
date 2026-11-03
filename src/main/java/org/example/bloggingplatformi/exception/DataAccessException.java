@@ -1,12 +1,8 @@
 package org.example.bloggingplatformi.exception;
 
 /**
- * Wraps a checked {@link java.sql.SQLException} or a MongoDB driver failure so
- * that the service and UI layers never import JDBC or Mongo types.
- *
- * <p>That boundary is the point of the whole DAO layer: the comment store can
- * be swapped between PostgreSQL and MongoDB without the layers above noticing,
- * and that is only true if the failure types are shared too.
+ * Wraps a database error from JDBC or MongoDB. The service and UI code only
+ * see this one type, so they do not need to know which database is used.
  */
 public class DataAccessException extends RuntimeException {
 

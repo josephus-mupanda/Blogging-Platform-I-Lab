@@ -1,17 +1,14 @@
 -- =====================================================================
--- Smart Blogging Platform - Index Strategy (PostgreSQL)
--- Phase 1 / Epic 1 - User Story 1.2
+-- Smart Blogging Platform: indexes (PostgreSQL).
 --
 -- Run as:  psql -U postgres -d blogging_platform -f db/postgres/V2__indexes.sql
 --
--- This file is separate from V1__schema.sql on purpose. Phase 4 measures
--- query plans BEFORE running this script and AFTER, so the performance
--- report compares the same queries on the same data with and without
--- indexing. To reset to the unindexed baseline, run the DROP block at the
+-- Kept apart from V1__schema.sql so the same queries can be timed before
+-- and after indexing. To go back to no indexes, run the DROP block at the
 -- bottom of this file.
 --
--- Primary keys and UNIQUE constraints already create implicit B-tree
--- indexes; those are not repeated here.
+-- Primary keys and UNIQUE constraints already have their own indexes,
+-- so they are not repeated here.
 -- =====================================================================
 
 BEGIN;
@@ -20,42 +17,40 @@ BEGIN;
 -- posts
 -- ---------------------------------------------------------------------
 
--- Foreign-key column. PostgreSQL does NOT index FK columns automatically,
--- and an unindexed FK makes both "posts by author" and the cascade on
--- user deletion scan the whole table.
+-- Speeds up "posts by author". PostgreSQL does not index foreign keys by
+-- itself, so deleting a user would also scan the whole posts table.
 CREATE INDEX IF NOT EXISTS idx_posts_author_id
     ON posts (author_id);
 
--- The default feed: WHERE status = 'PUBLISHED' ORDER BY published_at DESC.
--- Equality column first, sort column second, so one index serves the
--- filter and removes the sort node from the plan entirely.
+-- Speeds up the main feed: published posts, newest first.
+-- The filter column comes first and the sort column second, so no extra sort is needed.
 CREATE INDEX IF NOT EXISTS idx_posts_status_published
     ON posts (status, published_at DESC);
 
--- Case-insensitive title lookup: WHERE LOWER(title) = LOWER(?).
--- An expression index is required; a plain index on title cannot serve it.
+-- Speeds up case-insensitive title lookup: WHERE LOWER(title) = LOWER(?).
+-- A plain index on title cannot be used for LOWER(title).
 CREATE INDEX IF NOT EXISTS idx_posts_title_lower
     ON posts (LOWER(title));
 
--- Substring search: WHERE title ILIKE '%term%'. A B-tree is useless for a
--- leading wildcard; a trigram GIN index is not.
+-- Speeds up title search with ILIKE '%term%'. A normal B-tree index
+-- cannot help when the pattern starts with %, but a trigram index can.
 CREATE INDEX IF NOT EXISTS idx_posts_title_trgm
     ON posts USING GIN (title gin_trgm_ops);
 
--- Full-text keyword search across title and body, with the title weighted
--- above the body so a term in the headline ranks higher.
+-- Full-text search over title and body. Words in the title get a
+-- higher weight than words in the body.
 CREATE INDEX IF NOT EXISTS idx_posts_search_tsv
     ON posts USING GIN ((
         setweight(to_tsvector('english', coalesce(title, '')), 'A') ||
         setweight(to_tsvector('english', coalesce(body,  '')), 'B')
     ));
 
--- Newest-first listing and keyset pagination.
+-- Speeds up "newest posts first" and keyset pagination.
 CREATE INDEX IF NOT EXISTS idx_posts_created_at
     ON posts (created_at DESC);
 
--- Trending / most-viewed, restricted to published rows. Partial, because
--- drafts are never shown in that list and do not belong in the index.
+-- Speeds up "most viewed posts". Only published posts are indexed,
+-- because drafts never appear in that list.
 CREATE INDEX IF NOT EXISTS idx_posts_views_published
     ON posts (view_count DESC)
     WHERE status = 'PUBLISHED';
@@ -64,15 +59,16 @@ CREATE INDEX IF NOT EXISTS idx_posts_views_published
 -- tags and post_tags
 -- ---------------------------------------------------------------------
 
+-- Speeds up case-insensitive tag lookup by name.
 CREATE INDEX IF NOT EXISTS idx_tags_name_lower
     ON tags (LOWER(name));
 
--- Tag autocomplete: WHERE name ILIKE 'jav%'.
+-- Speeds up tag autocomplete: WHERE name ILIKE 'jav%'.
 CREATE INDEX IF NOT EXISTS idx_tags_name_trgm
     ON tags USING GIN (name gin_trgm_ops);
 
--- The composite PK (post_id, tag_id) only supports post-first access.
--- "All posts carrying this tag" needs the reverse order.
+-- Speeds up "all posts with this tag". The primary key (post_id, tag_id)
+-- only helps when we start from the post, so we need the reverse order.
 CREATE INDEX IF NOT EXISTS idx_post_tags_tag_id
     ON post_tags (tag_id, post_id);
 
@@ -80,31 +76,29 @@ CREATE INDEX IF NOT EXISTS idx_post_tags_tag_id
 -- comments
 -- ---------------------------------------------------------------------
 
--- Load one post's thread in chronological order: filter and sort together.
+-- Speeds up loading one post's comments in date order.
 CREATE INDEX IF NOT EXISTS idx_comments_post_created
     ON comments (post_id, created_at);
 
--- Reply resolution. Partial, because most comments are top level and NULL
--- parents would otherwise dominate the index for no benefit.
+-- Speeds up finding the replies to a comment. Top-level comments have a
+-- NULL parent, so they are left out to keep the index small.
 CREATE INDEX IF NOT EXISTS idx_comments_parent
     ON comments (parent_comment_id)
     WHERE parent_comment_id IS NOT NULL;
 
+-- Speeds up "comments by user" and the SET NULL when a user is deleted.
 CREATE INDEX IF NOT EXISTS idx_comments_author
     ON comments (author_id);
 
--- Moderation queue: WHERE status <> 'VISIBLE' ORDER BY created_at DESC.
--- Partial, so only the ~2% non-visible minority is indexed. Keyed on
--- created_at alone, not (status, created_at): with status first the queue
--- spans two status ranges, so PostgreSQL had to read all ~15 000 queued rows
--- and sort them to return 50 (25 ms in Phase 4). Keyed on the sort column it
--- reads the newest 50 entries and stops.
+-- Speeds up the moderation queue: hidden or flagged comments, newest first.
+-- Only non-visible comments (about 2%) are indexed. The key is created_at
+-- alone, so PostgreSQL can read the newest 50 and stop without sorting.
 CREATE INDEX IF NOT EXISTS idx_comments_moderation
     ON comments (created_at DESC)
     WHERE status <> 'VISIBLE';
 
--- Keyword search in comments: body ILIKE '%term%'. Added in Phase 4, which
--- measured the unindexed search at 1.6 s over 630 000 comments.
+-- Speeds up keyword search in comments: body ILIKE '%term%'.
+-- Without it, this search took about 1.6 s over 630 000 comments.
 CREATE INDEX IF NOT EXISTS idx_comments_body_trgm
     ON comments USING GIN (body gin_trgm_ops);
 
@@ -112,17 +106,18 @@ CREATE INDEX IF NOT EXISTS idx_comments_body_trgm
 -- reviews
 -- ---------------------------------------------------------------------
 
--- Rating aggregate per post. Covering (post_id, rating) lets AVG/COUNT be
--- answered index-only, without touching the heap.
+-- Speeds up the average rating per post. Both columns are in the index,
+-- so AVG and COUNT can be read from the index without the table.
 CREATE INDEX IF NOT EXISTS idx_reviews_post_rating
     ON reviews (post_id, rating);
 
+-- Speeds up "reviews by user", newest first.
 CREATE INDEX IF NOT EXISTS idx_reviews_reviewer
     ON reviews (reviewer_id, created_at DESC);
 
 COMMIT;
 
--- Refresh planner statistics so the first EXPLAIN after indexing is fair.
+-- Update table statistics so the query planner knows about the new indexes.
 ANALYZE users;
 ANALYZE posts;
 ANALYZE tags;
@@ -131,7 +126,7 @@ ANALYZE comments;
 ANALYZE reviews;
 
 -- =====================================================================
--- Baseline reset for Phase 4 benchmarking.
+-- Remove all indexes above, for benchmarking without indexes.
 -- Uncomment and run to return the database to its unindexed state.
 -- =====================================================================
 -- DROP INDEX IF EXISTS idx_posts_author_id;

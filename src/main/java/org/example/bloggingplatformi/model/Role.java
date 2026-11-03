@@ -1,14 +1,14 @@
 package org.example.bloggingplatformi.model;
 
-/** Mirrors the {@code ck_users_role} CHECK constraint. */
+/** A user's role. These match the values allowed by the database check. */
 public enum Role {
     ADMIN,
     AUTHOR,
     READER;
 
     /**
-     * Parses a database value. Unknown input is a data-integrity problem
-     * rather than a user mistake, so it fails loudly instead of defaulting.
+     * Reads a role from the database. An unknown value means bad data,
+     * so it throws instead of picking a default.
      */
     public static Role from(String value) {
         if (value == null) {

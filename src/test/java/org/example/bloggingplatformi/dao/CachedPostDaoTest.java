@@ -24,12 +24,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Correctness tests for the caching decorator.
- *
- * <p>Phase 4 step 4.2 requires cache invalidation to be <em>proven</em>, not
- * asserted in prose. These tests do that by counting calls to a recording DAO
- * underneath: a cache hit is a call that did not happen, and a stale read is a
- * returned value that does not match what the store now holds.
+ * Tests for CachedPostDao, the cache in front of the post DAO.
+ * A fake DAO underneath counts its calls: a cache hit means no call reached it,
+ * and a stale read means the cache returned old data after a change.
  */
 class CachedPostDaoTest {
 
@@ -65,7 +62,7 @@ class CachedPostDaoTest {
     void slugLookupUsesHashIndex() {
         long id = seed("Indexed Post", "indexed-post");
 
-        cached.findById(id);                       // loads and populates both structures
+        cached.findById(id);                       // loads the post and fills both the cache and the slug index
         cached.findBySlug("indexed-post");
         cached.findBySlug("indexed-post");
 
@@ -89,8 +86,7 @@ class CachedPostDaoTest {
     @Test
     @DisplayName("a post that does not exist is not cached as absent")
     void absenceIsNotCached() {
-        // Caching a miss would be wrong here: the row may be inserted a moment
-        // later, and a cached absence would hide it until eviction.
+        // The post could be inserted later, so "not found" is not cached.
         assertTrue(cached.findById(999).isEmpty());
         assertTrue(cached.findById(999).isEmpty());
 
@@ -118,7 +114,7 @@ class CachedPostDaoTest {
     }
 
     // -----------------------------------------------------------------
-    // Invalidation - the correctness proof for step 4.2
+    // Invalidation: after a write, the cache must not return old data
     // -----------------------------------------------------------------
 
     @Test
@@ -150,8 +146,7 @@ class CachedPostDaoTest {
     @Test
     @DisplayName("a deleted post's slug stops resolving")
     void deleteClearsTheSlugIndex() {
-        // The nastier half of the same bug: the post is gone from the LRU but
-        // its slug still maps to the id, so a slug lookup would resurrect it.
+        // The slug index must also forget the post, or a slug lookup would still find it.
         long id = seed("Doomed", "doomed-slug");
         cached.findBySlug("doomed-slug");
 
@@ -164,8 +159,8 @@ class CachedPostDaoTest {
     @Test
     @DisplayName("an update invalidates even when no row was changed")
     void updateInvalidatesOnNoOp() {
-        // "No row changed" can mean the row was deleted by someone else, so
-        // the cached copy must go either way.
+        // "No row changed" can mean someone else deleted the row,
+        // so the cached copy is removed anyway.
         long id = seed("Present", "present");
         cached.findById(id);
 
@@ -179,8 +174,8 @@ class CachedPostDaoTest {
     @Test
     @DisplayName("an insert does not cache the in-memory object")
     void insertDoesNotCacheStaleObject() {
-        // The object handed to insert has no created_at; the row does. Caching
-        // the in-memory version would serve null timestamps until eviction.
+        // The object passed to insert has no created_at, but the saved row does.
+        // So the next read must load the row from the database.
         Post draft = Post.builder()
                 .authorId(1).title("Fresh").slug("fresh").body("Body")
                 .status(PostStatus.DRAFT)
@@ -201,9 +196,8 @@ class CachedPostDaoTest {
     @Test
     @DisplayName("a view increments the cached copy instead of evicting it")
     void viewKeepsTheEntryWarm() {
-        // Invalidating here would be self-defeating: reading a post is what
-        // increments its counter, so every read of a popular post would evict
-        // the entry caching it was meant to provide.
+        // Every read of a post adds a view. If that removed the cache entry,
+        // popular posts would never stay cached.
         long id = seed("Popular", "popular");
         int before = cached.findById(id).orElseThrow().viewCount();
 
@@ -232,8 +226,7 @@ class CachedPostDaoTest {
     @Test
     @DisplayName("search is never cached")
     void searchAlwaysHitsTheDatabase() {
-        // The key would be the whole filter, so the hit rate would approach
-        // zero, and a cached listing would hide newly written posts.
+        // Filters rarely repeat, and a cached list would hide new posts.
         cached.search(PostFilter.all());
         cached.search(PostFilter.all());
 
@@ -243,8 +236,7 @@ class CachedPostDaoTest {
     @Test
     @DisplayName("existsBySlug is never answered from the cache")
     void existsBySlugAlwaysHitsTheDatabase() {
-        // A cached absence cannot prove a slug is free, and a wrong answer
-        // here would let a duplicate slug through.
+        // The cache cannot prove a slug is free, and a wrong answer would allow a duplicate slug.
         seed("Taken", "taken");
         cached.findBySlug("taken");
 

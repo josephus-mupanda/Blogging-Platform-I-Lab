@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
 import com.mongodb.MongoException;
@@ -36,21 +37,9 @@ import org.example.bloggingplatformi.model.Comment;
 import org.example.bloggingplatformi.model.CommentStatus;
 
 /**
- * MongoDB implementation of {@link CommentDao}, using the materialized path
- * described in section 7.1 of the design document.
- *
- * <p>Two differences from {@link JdbcCommentDao} are worth reading the code
- * for, because they are the substance of the Phase 4 comparison:
- *
- * <ul>
- *   <li><b>Subtree reads are a prefix match.</b> {@link #findSubtree} is one
- *       indexed query against {@code path}, where the relational version
- *       recurses once per level of nesting.</li>
- *   <li><b>Cascades are manual.</b> There is no {@code ON DELETE CASCADE}, so
- *       {@link #deleteWithReplies} has to delete by path prefix itself, and
- *       {@link #renameAuthor} has to fix every denormalized copy of the name.
- *       The relational store gets both for free.</li>
- * </ul>
+ * CommentDao for MongoDB. Each comment stores a path of its ancestor ids
+ * (for example "/id1/id2/"), so a whole subtree can be found with one prefix match.
+ * MongoDB has no cascade, so deletes and author renames are done by hand here.
  */
 public class MongoCommentDao implements CommentDao {
 
@@ -87,15 +76,11 @@ public class MongoCommentDao implements CommentDao {
 
     @Override
     public List<Comment> findByPostId(long postId, boolean includeHidden) {
-        // A stored path holds the ancestors only, so every root shares "/" and
-        // sorting by path alone would list all roots before any reply. Instead
-        // read the post's comments in chronological order (one query on
-        // idx_comments_post_created) and walk the tree depth-first, which is
-        // the order the relational recursive CTE produces.
-        //
-        // Hidden comments are filtered after the walk, not in the query, for
-        // the same reason the CTE filters last: a visible reply to a hidden
-        // comment must keep its place in the thread rather than vanish.
+        // Sorting by path would put all top-level comments first, since they all
+        // have path "/". So we load the comments oldest first and let
+        // threadOrder put each reply under its parent.
+        // Hidden comments are removed after ordering, so a visible reply
+        // to a hidden comment still keeps its place.
         return run(() -> {
             List<Comment> thread = threadOrder(collect(comments()
                     .find(Filters.eq(F_POST_ID, postId))
@@ -153,9 +138,8 @@ public class MongoCommentDao implements CommentDao {
         if (keyword == null || keyword.isBlank()) {
             return List.of();
         }
-        // Uses idx_comments_body_text. Unlike the relational ILIKE scan this is
-        // an index lookup, but it matches whole stemmed words only, so a
-        // partial-word query returns nothing. Phase 4 reports both facts.
+        // Uses the text index idx_comments_body_text. It only matches whole
+        // words, so part of a word finds nothing (unlike ILIKE in PostgreSQL).
         return run(() -> collect(comments()
                 .find(Filters.text(keyword.strip()))
                 .sort(Sorts.descending(F_CREATED_AT))
@@ -165,10 +149,8 @@ public class MongoCommentDao implements CommentDao {
     @Override
     public List<Comment> findForModeration(int limit) {
         return run(() -> collect(comments()
-                // $in over the non-visible statuses, not $ne VISIBLE: both mean
-                // the same, but only $in implies the partial index's filter, so
-                // only $in can use idx_comments_moderation. $ne scanned all
-                // 630 000 documents of the benchmark set (438 ms vs 3 ms).
+                // Uses $in with the non-visible statuses instead of $ne VISIBLE.
+                // Only $in can use the idx_comments_moderation index. $ne scans every comment.
                 .find(Filters.in(F_STATUS, NON_VISIBLE))
                 .sort(Sorts.descending(F_CREATED_AT))
                 .limit(Math.max(1, limit))));
@@ -188,8 +170,7 @@ public class MongoCommentDao implements CommentDao {
         if (postIds.isEmpty()) {
             return Map.of();
         }
-        // One $match on idx_comments_post_created's prefix, then a $group:
-        // the document-store equivalent of GROUP BY post_id.
+        // $match then $group, the MongoDB version of GROUP BY post_id.
         return run(() -> {
             Map<Long, Long> counts = new HashMap<>();
             for (Document row : comments().aggregate(List.of(
@@ -239,9 +220,7 @@ public class MongoCommentDao implements CommentDao {
             return false;
         }
         return run(() -> {
-            // $push onto editHistory keeps the previous text. There is no
-            // relational column for this; it is one of the open-ended fields
-            // the document model exists to carry.
+            // The old text is saved in an editHistory array. PostgreSQL has no such column.
             Document existing = comments().find(Filters.eq("_id", id)).first();
             if (existing == null) {
                 return false;
@@ -282,9 +261,8 @@ public class MongoCommentDao implements CommentDao {
             if (root == null) {
                 return 0L;
             }
-            // No ON DELETE CASCADE here, so the subtree is removed explicitly.
-            // One prefix-matched deleteMany covers every depth at once, which
-            // is the advantage the materialized path buys back.
+            // MongoDB has no cascade, so the replies are deleted here.
+            // One deleteMany on the path prefix removes replies at every depth.
             DeleteResult descendants = comments().deleteMany(descendantsOf(root));
             DeleteResult self = comments().deleteOne(Filters.eq("_id", id));
 
@@ -299,9 +277,8 @@ public class MongoCommentDao implements CommentDao {
 
     @Override
     public long renameAuthor(long authorId, String newDisplayName) {
-        // The price of the denormalized authorName: a rename is a write across
-        // every comment that person ever left. The relational store reaches the
-        // name by join and needs no equivalent.
+        // Each comment keeps a copy of the author name, so a rename must
+        // update all of that author's comments.
         return run(() -> comments().updateMany(
                 Filters.eq(F_AUTHOR_ID, authorId),
                 Updates.combine(Updates.set(F_AUTHOR_NAME, newDisplayName),
@@ -309,27 +286,16 @@ public class MongoCommentDao implements CommentDao {
                 .getModifiedCount());
     }
 
-    /** Every status the moderation queue shows. Derived, so a new status is not missed. */
+    /** Every status except VISIBLE. Built from the enum, so a new status is included. */
     private static final List<String> NON_VISIBLE = java.util.Arrays.stream(CommentStatus.values())
             .filter(status -> status != CommentStatus.VISIBLE)
             .map(Enum::name)
             .toList();
 
     /**
-     * Everything below {@code root}: same post, path starting with
-     * {@code "<root.path><root id>/"}.
-     *
-     * <p>Both halves matter for speed, and Phase 4 measured each:
-     * <ul>
-     *   <li>{@code postId} must be in the filter. The index is
-     *       {@code {postId: 1, path: 1}}; a path condition alone cannot use it,
-     *       and the read became a 630 000-document collection scan (2.1 s).</li>
-     *   <li>The regex must be a plain anchored prefix. MongoDB turns
-     *       {@code ^/abc/} into tight index bounds; {@code ^\Q/abc/\E}
-     *       ({@code Pattern.quote}) defeats that analysis.</li>
-     * </ul>
-     * The prefix is still escaped, character by character, so stored data can
-     * never act as regex syntax.
+     * Filter for all replies under root: same post, and a path that starts
+     * with the root's path plus the root's id.
+     * postId is included so the {postId, path} index can be used.
      */
     private static Bson descendantsOf(Document root) {
         String prefix = root.getString(F_PATH) + root.getObjectId("_id").toHexString() + "/";
@@ -338,6 +304,10 @@ public class MongoCommentDao implements CommentDao {
                 Filters.regex(F_PATH, Pattern.compile("^" + escapeRegex(prefix))));
     }
 
+    /**
+     * Escapes regex special characters one by one. Pattern.quote is not used
+     * because MongoDB cannot use the index with it.
+     */
     static String escapeRegex(String literal) {
         StringBuilder escaped = new StringBuilder(literal.length() + 8);
         for (char c : literal.toCharArray()) {
@@ -349,17 +319,9 @@ public class MongoCommentDao implements CommentDao {
         return escaped.toString();
     }
 
-    // -----------------------------------------------------------------
-    // Mapping and plumbing
-    // -----------------------------------------------------------------
-
     /**
-     * Reorders comments, given in chronological order, into thread order: each
-     * comment followed by its replies, depth-first, siblings oldest first.
-     *
-     * <p>A comment whose parent is not in the list is treated as a root, so a
-     * partial result (a subtree, or a thread with a missing parent) loses
-     * nothing. Runs in O(n).
+     * Takes comments sorted oldest first and puts each reply right after its parent.
+     * A comment whose parent is not in the list is treated as top level.
      */
     static List<Comment> threadOrder(List<Comment> chronological) {
         Set<String> present = new HashSet<>();
@@ -377,7 +339,7 @@ public class MongoCommentDao implements CommentDao {
             }
         }
 
-        // Iterative, so a pathologically deep thread cannot overflow the stack.
+        // Uses a stack instead of recursion, so a very deep thread cannot cause a StackOverflowError.
         List<Comment> ordered = new ArrayList<>(chronological.size());
         Deque<Comment> stack = new ArrayDeque<>();
         for (int i = roots.size() - 1; i >= 0; i--) {
@@ -415,9 +377,7 @@ public class MongoCommentDao implements CommentDao {
             });
         }
 
-        // The seed writes postId and authorId as NumberLong, but a document
-        // inserted elsewhere could hold an int. Reading through Number covers
-        // both rather than throwing a ClassCastException on valid data.
+        // Ids may be stored as int or long, so they are read as Number.
         return new Comment(
                 document.getObjectId("_id").toHexString(),
                 toLong(document.get(F_POST_ID), 0L),
@@ -442,8 +402,7 @@ public class MongoCommentDao implements CommentDao {
     }
 
     private static OffsetDateTime toOffsetDateTime(Date date) {
-        // BSON dates are UTC instants with no stored offset, so UTC is the
-        // honest reading. The SQL side keeps a real offset in TIMESTAMPTZ.
+        // MongoDB dates are stored in UTC with no offset.
         return date == null ? null : date.toInstant().atOffset(ZoneOffset.UTC);
     }
 
@@ -454,17 +413,13 @@ public class MongoCommentDao implements CommentDao {
         return ObjectId.isValid(id.strip()) ? new ObjectId(id.strip()) : null;
     }
 
-    /** Wraps driver failures in the shared exception type, as the DAO contract requires. */
-    private static <T> T run(MongoOperation<T> operation) {
+    /** Runs a MongoDB call and wraps any MongoException in a DataAccessException. */
+    private static <T> T run(Supplier<T> operation) {
         try {
-            return operation.execute();
+            return operation.get();
         } catch (MongoException e) {
             throw new DataAccessException("MongoDB comment operation failed: " + e.getMessage(), e);
         }
     }
 
-    @FunctionalInterface
-    private interface MongoOperation<T> {
-        T execute();
-    }
 }

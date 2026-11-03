@@ -1,18 +1,15 @@
 package org.example.bloggingplatformi.model;
 
 /**
- * The criteria behind the post list: search box, filters, sort and page.
+ * What the post list should show: search text, filters, sort order and page.
+ * Every field is optional. An empty filter lists all posts, newest first.
  *
- * <p>Every field is optional. A filter with nothing set lists everything,
- * newest first. The DAO builds its WHERE clause from whichever fields are
- * populated and binds each value as a parameter.
- *
- * @param keyword    free text matched against title and body, case-insensitively
+ * @param keyword    text to find in the title or body, ignoring case
  * @param authorId   null for any author
  * @param tagId      null for any tag
  * @param status     null for any status
- * @param sort       never null; defaults to {@link PostSort#NEWEST}
- * @param pageNumber zero-based
+ * @param sort       never null, defaults to NEWEST
+ * @param pageNumber starts at 0
  */
 public record PostFilter(
         String keyword,
@@ -26,7 +23,7 @@ public record PostFilter(
 
     public static final int DEFAULT_PAGE_SIZE = 20;
 
-    /** Guards against a client asking for the whole table in one page. */
+    /** Stops a caller from asking for the whole table in one page. */
     public static final int MAX_PAGE_SIZE = 200;
 
     public PostFilter {
@@ -40,7 +37,7 @@ public record PostFilter(
         return new PostFilter(null, null, null, null, PostSort.NEWEST, 0, DEFAULT_PAGE_SIZE);
     }
 
-    /** The reader-facing feed: published posts only. */
+    /** Published posts only, most recently published first. */
     public static PostFilter published() {
         return all().withStatus(PostStatus.PUBLISHED).withSort(PostSort.RECENTLY_PUBLISHED);
     }
@@ -53,9 +50,8 @@ public record PostFilter(
         return (long) pageNumber * pageSize;
     }
 
-    // Each change resets to page zero, except withPage itself. Changing a
-    // filter while staying on page seven usually lands past the end of the
-    // new result set, which reads as "the search found nothing".
+    // Each "with" method goes back to page 0, except withPage. Otherwise a new
+    // filter could leave you on a page past the end, which looks like no results.
 
     public PostFilter withKeyword(String value) {
         return new PostFilter(value, authorId, tagId, status, sort, 0, pageSize);

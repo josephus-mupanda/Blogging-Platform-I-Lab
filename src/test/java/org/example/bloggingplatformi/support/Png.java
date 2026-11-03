@@ -13,13 +13,9 @@ import javafx.scene.image.Image;
 import javafx.scene.image.PixelReader;
 
 /**
- * Writes a JavaFX {@link Image} as a PNG.
- *
- * <p>The usual route is {@code SwingFXUtils} plus {@code ImageIO}, which needs
- * the {@code javafx.swing} and {@code java.desktop} modules. The application
- * module requires neither, and adding them only so a test can save a picture
- * would widen the production module graph for no runtime benefit. A PNG is
- * three chunks and a zlib stream, which the JDK already provides.
+ * Saves a JavaFX {@link Image} as a PNG file, for test screenshots.
+ * SwingFXUtils and ImageIO would need extra modules the app does not use,
+ * so this writes the PNG by hand with the JDK's zlib and CRC32 classes.
  */
 public final class Png {
 
@@ -33,7 +29,7 @@ public final class Png {
         int height = (int) image.getHeight();
         PixelReader reader = image.getPixelReader();
 
-        // One filter byte (0 = none) then RGB triples, per scanline.
+        // Each row is one filter byte (0 = none), then 3 bytes (R, G, B) per pixel.
         ByteArrayOutputStream compressed = new ByteArrayOutputStream();
         try (DeflaterOutputStream zlib = new DeflaterOutputStream(compressed)) {
             byte[] row = new byte[1 + width * 3];
@@ -56,7 +52,7 @@ public final class Png {
         writeInt(header, width);
         writeInt(header, height);
         header.write(8);  // bit depth
-        header.write(2);  // colour type: truecolour RGB
+        header.write(2);  // colour type: RGB
         header.write(0);  // compression
         header.write(0);  // filter
         header.write(0);  // no interlace

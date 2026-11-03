@@ -11,7 +11,7 @@ import org.example.bloggingplatformi.exception.EntityNotFoundException;
 import org.example.bloggingplatformi.exception.ValidationException;
 import org.example.bloggingplatformi.model.Review;
 
-/** Business rules for reviews: rating bounds and the one-per-user-per-post rule. */
+/** Business rules for reviews: ratings from 1 to 5, and one review per user per post. */
 public class ReviewService {
 
     private static final int MAX_HEADLINE = 150;
@@ -47,7 +47,7 @@ public class ReviewService {
         return reviewDao.findByPostAndReviewer(postId, reviewerId);
     }
 
-    /** Empty when the post has no reviews; the UI shows a dash, not a zero. */
+    /** Empty when the post has no reviews, so the UI can show a dash instead of zero. */
     public Optional<Double> averageRating(long postId) {
         return reviewDao.averageRating(postId);
     }
@@ -65,12 +65,8 @@ public class ReviewService {
     }
 
     /**
-     * Adds a review.
-     *
-     * <p>The pre-check gives a readable message; the real guarantee is the
-     * UNIQUE constraint in PostgreSQL and the unique index in MongoDB, either
-     * of which surfaces as a {@link DuplicateEntityException} if two reviews
-     * race.
+     * Adds a review. The check here gives a clear message. The unique
+     * constraint or index in the database still blocks a duplicate that slips past it.
      */
     public Review add(long postId, long reviewerId, String reviewerName,
                       int rating, String headline, String body) {
@@ -103,12 +99,8 @@ public class ReviewService {
     }
 
     /**
-     * Replaces a review's optional sub-scores.
-     *
-     * <p>Only meaningful on the MongoDB implementation; the relational table
-     * has no column for them, so the JDBC DAO returns them empty. Section 7.2
-     * of the design document explains why that asymmetry is the point rather
-     * than a gap.
+     * Replaces a review's optional sub-scores. Only MongoDB stores them.
+     * The PostgreSQL table has no column for them, so they come back empty.
      */
     public Review setCriteria(String reviewId, Map<String, Integer> criteria) {
         Review existing = reviewDao.findById(reviewId)
@@ -134,7 +126,7 @@ public class ReviewService {
         return reviewDao.deleteById(reviewId);
     }
 
-    /** Needed when reviews live in MongoDB and the post is deleted in PostgreSQL. */
+    /** Needed for MongoDB, because deleting a post in PostgreSQL does not remove its reviews there. */
     public long deleteForPost(long postId) {
         return reviewDao.deleteByPostId(postId);
     }
@@ -149,7 +141,7 @@ public class ReviewService {
     }
 
     private void validateRating(int rating, ValidationException.Collector errors) {
-        // Mirrors CHECK (rating BETWEEN 1 AND 5) and the Mongo validator.
+        // Same rule as the database checks, but with a friendly message.
         errors.rejectIf(rating < Review.MIN_RATING || rating > Review.MAX_RATING,
                 "rating",
                 "Ratings must be between " + Review.MIN_RATING + " and " + Review.MAX_RATING + ".");
@@ -162,7 +154,7 @@ public class ReviewService {
                 "body", "Reviews must be at most " + MAX_BODY + " characters.");
     }
 
-    /** Empty text is stored as NULL, not "", so the two cannot both mean "absent". */
+    /** Turns blank text into null, so "no text" is always stored the same way. */
     private static String trimOrNull(String value) {
         if (value == null) {
             return null;
