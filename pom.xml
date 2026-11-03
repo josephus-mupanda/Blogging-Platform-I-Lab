@@ -32,6 +32,12 @@
             <artifactId>javafx-controls</artifactId>
             <version>${javafx.version}</version>
         </dependency>
+        <!-- FXML: the screen layouts are .fxml files in src/main/resources/.../view/ -->
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-fxml</artifactId>
+            <version>${javafx.version}</version>
+        </dependency>
         <!-- Relational store: PostgreSQL over JDBC -->
         <dependency>
             <groupId>org.postgresql</groupId>

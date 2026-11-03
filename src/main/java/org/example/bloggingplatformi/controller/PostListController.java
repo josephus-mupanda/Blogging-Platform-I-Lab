@@ -1,9 +1,12 @@
-package org.example.bloggingplatformi.view;
+package org.example.bloggingplatformi.controller;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Function;
 
 import javafx.animation.PauseTransition;
+import javafx.fxml.FXML;
+import javafx.beans.property.SimpleObjectProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
@@ -14,14 +17,15 @@ import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.TableCell;
 import javafx.scene.control.TableColumn;
+import javafx.scene.control.TableRow;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.HBox;
-import javafx.scene.layout.Priority;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.util.Duration;
+import javafx.util.StringConverter;
 
 import org.example.bloggingplatformi.model.Page;
 import org.example.bloggingplatformi.model.PostFilter;
@@ -36,30 +40,26 @@ import org.example.bloggingplatformi.service.UserService;
 import org.example.bloggingplatformi.ui.AppShell;
 import org.example.bloggingplatformi.ui.Async;
 import org.example.bloggingplatformi.ui.Dialogs;
+import org.example.bloggingplatformi.ui.Fxml;
 import org.example.bloggingplatformi.ui.Icons;
+import org.example.bloggingplatformi.ui.Session;
 import org.example.bloggingplatformi.ui.Styles;
 import org.example.bloggingplatformi.ui.View;
 
 /**
- * The post list: search, filter, sort and page through everything in the
- * database.
- *
- * <p>This screen is where User Story 2.2 is actually delivered, so the filter
- * state lives in one immutable {@link PostFilter} that is rebuilt on each
- * change and handed straight to the DAO. Keeping it in a single value, rather
- * than reading six controls at query time, is what makes "which page am I on"
- * answerable and keeps the paging controls honest.
+ * Controller for post-list.fxml: search, filter, sort and page through all posts.
+ * The current filters are kept in one {@link PostFilter} object, which is
+ * replaced on every change and passed to the service.
  */
-public class PostListView implements View {
+public class PostListController implements View {
 
-    /** All filter controls carry a sentinel for "no filter" rather than a null. */
+    /** A fake "All authors" item with id -1. It means "no author filter". */
     private static final User ANY_AUTHOR =
             new User(-1, "any", "any@any", "", "All authors", null,
                      org.example.bloggingplatformi.model.Role.READER, true, null, null);
     /**
-     * Tag names are normalised to lower case by {@link Tag}, so the sentinel
-     * is given a display name through the combo's converter instead of trying
-     * to hold "All tags" as its name.
+     * A fake "All tags" item with id -1.
+     * Tag names are stored in lower case, so the label "All tags" comes from the converter.
      */
     private static final Tag ANY_TAG = new Tag(-1, "all tags", "all-tags", null);
     private static final String ANY_TAG_LABEL = "All tags";
@@ -69,38 +69,46 @@ public class PostListView implements View {
     private final UserService userService = new UserService();
     private final TagService tagService = new TagService();
 
-    private final VBox root = new VBox(16);
-    private final TableView<PostSummary> table = new TableView<>();
     private final ObservableList<PostSummary> rows = FXCollections.observableArrayList();
+    private final Node root;
 
-    private final TextField searchField = new TextField();
-    private final ComboBox<User> authorFilter = new ComboBox<>();
-    private final ComboBox<Tag> tagFilter = new ComboBox<>();
-    private final ComboBox<String> statusFilter = new ComboBox<>();
-    private final ComboBox<PostSort> sortFilter = new ComboBox<>();
+    // Filled by FXMLLoader from the fx:id values in post-list.fxml.
+    @FXML private FlowPane filterBar;
+    @FXML private StackPane searchBox;
+    @FXML private TextField searchField;
+    @FXML private ComboBox<User> authorFilter;
+    @FXML private ComboBox<Tag> tagFilter;
+    @FXML private ComboBox<String> statusFilter;
+    @FXML private ComboBox<PostSort> sortFilter;
 
-    private final Label rangeLabel = Styles.label("", "text-small");
-    private final Button previousButton = new Button("Previous");
-    private final Button nextButton = new Button("Next");
+    @FXML private TableView<PostSummary> table;
+    @FXML private TableColumn<PostSummary, PostSummary> titleColumn;
+    @FXML private TableColumn<PostSummary, PostSummary> authorColumn;
+    @FXML private TableColumn<PostSummary, PostStatus> statusColumn;
+    @FXML private TableColumn<PostSummary, String> engagementColumn;
+    @FXML private TableColumn<PostSummary, String> ratingColumn;
+    @FXML private TableColumn<PostSummary, PostSummary> actionsColumn;
 
-    /**
-     * Debounce for the search box.
-     *
-     * <p>Without it every keystroke fires a query, so typing "indexing" issues
-     * eight of them and the last four race each other to repaint the table.
-     */
+    @FXML private Label rangeLabel;
+    @FXML private Button previousButton;
+    @FXML private Button nextButton;
+
+    /** Waits until the user stops typing before searching, so we do not run a query on every key. */
     private final PauseTransition searchDebounce = new PauseTransition(Duration.millis(280));
 
-    private PostFilter filter = PostFilter.all();
+    private PostFilter filter = startFilter();
     private boolean filtersReady;
 
-    public PostListView(AppShell shell) {
+    public PostListController(AppShell shell) {
         this.shell = shell;
+        this.root = Fxml.load("post-list.fxml", this);
+    }
 
-        buildTable();
-        root.getChildren().addAll(buildFilterBar(), buildTableCard());
-        root.setPadding(new Insets(24, 26, 28, 26));
-        VBox.setVgrow(root.getChildren().get(1), Priority.ALWAYS);
+    /** Called by FXMLLoader once the @FXML fields are filled. */
+    @FXML
+    private void initialize() {
+        setUpFilters();
+        setUpTable();
     }
 
     @Override
@@ -121,9 +129,13 @@ public class PostListView implements View {
         refresh.setTooltip(AppShell.tooltip("Reload from the database"));
         refresh.setOnAction(event -> load());
 
+        // Readers cannot write posts, so they only get the refresh button.
+        if (!Session.canPublish()) {
+            return List.of(refresh);
+        }
         return List.of(refresh,
                 shell.buildPrimaryButton("New post", Icons.PLUS,
-                        () -> shell.push(new PostEditorView(shell, null))));
+                        () -> shell.push(new PostEditorController(shell, null))));
     }
 
     @Override
@@ -138,17 +150,13 @@ public class PostListView implements View {
     // Filter bar
     // -----------------------------------------------------------------
 
-    private Node buildFilterBar() {
-        searchField.setPromptText("Search titles and content…");
-        searchField.getStyleClass().add("search-field");
-        searchField.setPrefWidth(300);
-
-        // The icon sits inside the field's left padding, which is what the
-        // extra left padding in the .search-field rule reserves.
-        StackPane searchBox = new StackPane(searchField,
-                Icons.of(Icons.SEARCH, 15));
-        StackPane.setAlignment(searchBox.getChildren().get(1), Pos.CENTER_LEFT);
-        StackPane.setMargin(searchBox.getChildren().get(1), new Insets(0, 0, 0, 10));
+    /** What happens when a filter changes: build a new PostFilter and reload the table. */
+    private void setUpFilters() {
+        // The icon sits inside the field, in the extra left padding set by the .search-field CSS rule.
+        Node searchIcon = Icons.of(Icons.SEARCH, 15);
+        searchBox.getChildren().add(searchIcon);
+        StackPane.setAlignment(searchIcon, Pos.CENTER_LEFT);
+        StackPane.setMargin(searchIcon, new Insets(0, 0, 0, 10));
 
         searchDebounce.setOnFinished(event -> {
             filter = filter.withKeyword(searchField.getText());
@@ -156,7 +164,6 @@ public class PostListView implements View {
         });
         searchField.textProperty().addListener((observable, old, text) -> searchDebounce.playFromStart());
 
-        authorFilter.setPrefWidth(165);
         authorFilter.setConverter(new SimpleConverter<>(User::displayName));
         authorFilter.valueProperty().addListener((observable, old, user) -> {
             if (filtersReady && user != null) {
@@ -165,7 +172,6 @@ public class PostListView implements View {
             }
         });
 
-        tagFilter.setPrefWidth(150);
         tagFilter.setConverter(new SimpleConverter<>(
                 tag -> tag.tagId() < 0 ? ANY_TAG_LABEL : tag.name()));
         tagFilter.valueProperty().addListener((observable, old, tag) -> {
@@ -175,9 +181,6 @@ public class PostListView implements View {
             }
         });
 
-        statusFilter.setPrefWidth(140);
-        statusFilter.getItems().addAll("All statuses", "Published", "Draft", "Archived");
-        statusFilter.setValue("All statuses");
         statusFilter.valueProperty().addListener((observable, old, status) -> {
             if (filtersReady) {
                 filter = filter.withStatus(switch (status) {
@@ -190,7 +193,6 @@ public class PostListView implements View {
             }
         });
 
-        sortFilter.setPrefWidth(175);
         sortFilter.getItems().addAll(PostSort.values());
         sortFilter.setValue(PostSort.NEWEST);
         sortFilter.setConverter(new SimpleConverter<>(PostSort::label));
@@ -201,25 +203,13 @@ public class PostListView implements View {
             }
         });
 
-        Button clear = new Button("Clear");
-        clear.getStyleClass().addAll("btn-ghost", "btn-small");
-        clear.setOnAction(event -> resetFilters());
-
-        // A FlowPane, not an HBox. These controls total roughly 1000px of
-        // fixed width, which overflows the content area on a 1280px screen.
-        // A FlowPane wraps them onto a second line instead of clipping the
-        // last control or forcing a horizontal scrollbar.
-        FlowPane bar = new FlowPane(10, 10,
-                searchBox, authorFilter, tagFilter, statusFilter, sortFilter, clear);
-        bar.setAlignment(Pos.CENTER_LEFT);
-        bar.getStyleClass().add("card");
-        bar.setPadding(new Insets(12, 14, 12, 14));
-
-        // The search box may shrink before the filters do.
-        searchField.setMinWidth(180);
-        return bar;
+        // Readers only see published posts, so the status filter is not shown to them.
+        if (!Session.canPublish()) {
+            filterBar.getChildren().remove(statusFilter);
+        }
     }
 
+    @FXML
     private void resetFilters() {
         filtersReady = false;
         searchField.clear();
@@ -229,8 +219,15 @@ public class PostListView implements View {
         sortFilter.setValue(PostSort.NEWEST);
         filtersReady = true;
 
-        filter = PostFilter.all();
+        filter = startFilter();
         load();
+    }
+
+    /**
+     * Readers only see published posts. Bloggers and admins also see drafts and archived posts.
+     */
+    private static PostFilter startFilter() {
+        return Session.canPublish() ? PostFilter.all() : PostFilter.all().withStatus(PostStatus.PUBLISHED);
     }
 
     private void loadFilterOptions() {
@@ -255,8 +252,7 @@ public class PostListView implements View {
             tagFilter.getItems().setAll(tags);
             tagFilter.setValue(ANY_TAG);
 
-            // Only now may the listeners fire queries; setting the values
-            // above would otherwise trigger three redundant loads.
+            // Turn the listeners on only now, so setting the values above does not run extra queries.
             filtersReady = true;
         }, error -> {
             authorFilter.getItems().setAll(ANY_AUTHOR);
@@ -271,48 +267,23 @@ public class PostListView implements View {
     // Table
     // -----------------------------------------------------------------
 
-    private Node buildTableCard() {
-        VBox card = new VBox(table, buildPager());
-        card.getStyleClass().add("card-flush");
-        VBox.setVgrow(table, Priority.ALWAYS);
-        return card;
-    }
-
-    private void buildTable() {
+    /** Says what each table column shows. The columns themselves are in post-list.fxml. */
+    private void setUpTable() {
         table.setItems(rows);
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
-        table.setPlaceholder(buildPlaceholder());
 
-        TableColumn<PostSummary, PostSummary> titleColumn = new TableColumn<>("TITLE");
         titleColumn.setCellValueFactory(data ->
-                new javafx.beans.property.SimpleObjectProperty<>(data.getValue()));
+                new SimpleObjectProperty<>(data.getValue()));
         titleColumn.setCellFactory(column -> new TitleCell());
-        titleColumn.setPrefWidth(340);
-        // Under the constrained policy every column shrinks proportionally
-        // once the table is narrower than the preferred total, which cut the
-        // status badge to "Publis..." on a 1280px screen. The other columns
-        // hold fixed-size content and get minimums; the title column already
-        // ellipsises and carries an excerpt, so it absorbs the squeeze.
-        titleColumn.setMinWidth(200);
-        titleColumn.setSortable(false);
 
-        TableColumn<PostSummary, PostSummary> authorColumn = new TableColumn<>("AUTHOR");
         authorColumn.setCellValueFactory(data ->
-                new javafx.beans.property.SimpleObjectProperty<>(data.getValue()));
+                new SimpleObjectProperty<>(data.getValue()));
         authorColumn.setCellFactory(column -> new AuthorCell());
-        authorColumn.setPrefWidth(170);
-        authorColumn.setMinWidth(150);
-        authorColumn.setSortable(false);
 
-        TableColumn<PostSummary, PostStatus> statusColumn = new TableColumn<>("STATUS");
         statusColumn.setCellValueFactory(data ->
-                new javafx.beans.property.SimpleObjectProperty<>(data.getValue().status()));
+                new SimpleObjectProperty<>(data.getValue().status()));
         statusColumn.setCellFactory(column -> new BadgeCell());
-        statusColumn.setPrefWidth(110);
-        statusColumn.setMinWidth(110);
-        statusColumn.setSortable(false);
 
-        TableColumn<PostSummary, String> engagementColumn = new TableColumn<>("ENGAGEMENT");
         engagementColumn.setCellValueFactory(data -> {
             PostSummary post = data.getValue();
             return new javafx.beans.property.SimpleStringProperty(
@@ -320,11 +291,7 @@ public class PostListView implements View {
                   + (post.hasEngagement() ? Styles.number(post.commentCount()) : "—")
                   + " comments");
         });
-        engagementColumn.setPrefWidth(200);
-        engagementColumn.setMinWidth(195);
-        engagementColumn.setSortable(false);
 
-        TableColumn<PostSummary, String> ratingColumn = new TableColumn<>("RATING");
         ratingColumn.setCellValueFactory(data -> {
             PostSummary post = data.getValue();
             String text = post.hasRating()
@@ -332,25 +299,14 @@ public class PostListView implements View {
                     : "—";
             return new javafx.beans.property.SimpleStringProperty(text);
         });
-        ratingColumn.setPrefWidth(100);
-        ratingColumn.setMinWidth(85);
-        ratingColumn.setSortable(false);
 
-        TableColumn<PostSummary, PostSummary> actionsColumn = new TableColumn<>("");
         actionsColumn.setCellValueFactory(data ->
-                new javafx.beans.property.SimpleObjectProperty<>(data.getValue()));
+                new SimpleObjectProperty<>(data.getValue()));
         actionsColumn.setCellFactory(column -> new ActionsCell());
-        actionsColumn.setPrefWidth(130);
-        actionsColumn.setMinWidth(125);
-        actionsColumn.setSortable(false);
 
-        table.getColumns().setAll(List.of(titleColumn, authorColumn, statusColumn,
-                engagementColumn, ratingColumn, actionsColumn));
-
-        // Opening a post is the overwhelmingly common intent, so the whole row
-        // responds to a double click rather than only the title.
+        // Double clicking anywhere on a row opens the post.
         table.setRowFactory(view -> {
-            var row = new javafx.scene.control.TableRow<PostSummary>();
+            TableRow<PostSummary> row = new TableRow<>();
             row.setOnMouseClicked(event -> {
                 if (event.getClickCount() == 2 && !row.isEmpty()) {
                     openDetail(row.getItem());
@@ -360,35 +316,16 @@ public class PostListView implements View {
         });
     }
 
-    private Node buildPlaceholder() {
-        Label heading = Styles.label("No posts match these filters", "text-subtitle");
-        Label hint = Styles.label("Try clearing the search box or widening the filters.",
-                "text-small");
-
-        VBox empty = new VBox(6, heading, hint);
-        empty.getStyleClass().add("empty-state");
-        empty.setAlignment(Pos.CENTER);
-        return empty;
+    @FXML
+    private void previousPage() {
+        filter = filter.previousPage();
+        load();
     }
 
-    private Node buildPager() {
-        previousButton.getStyleClass().addAll("btn-secondary", "btn-small");
-        nextButton.getStyleClass().addAll("btn-secondary", "btn-small");
-
-        previousButton.setOnAction(event -> {
-            filter = filter.previousPage();
-            load();
-        });
-        nextButton.setOnAction(event -> {
-            filter = filter.nextPage();
-            load();
-        });
-
-        // Allowed to ellipsise rather than push the pager buttons off the edge.
-        rangeLabel.setMinWidth(0);
-        HBox pager = Styles.row(8, rangeLabel, Styles.spacer(), previousButton, nextButton);
-        pager.getStyleClass().add("card-footer");
-        return pager;
+    @FXML
+    private void nextPage() {
+        filter = filter.nextPage();
+        load();
     }
 
     // -----------------------------------------------------------------
@@ -400,7 +337,7 @@ public class PostListView implements View {
 
         Async.run(() -> postService.search(requested),
                 page -> {
-                    // A slower earlier query must not overwrite a newer result.
+                    // Ignore the result if the filter changed while this query was running.
                     if (requested != filter) {
                         return;
                     }
@@ -434,7 +371,7 @@ public class PostListView implements View {
 
     private void openDetail(PostSummary post) {
         if (post != null) {
-            shell.push(new PostDetailView(shell, post.postId()));
+            shell.push(new PostDetailController(shell, post.postId()));
         }
     }
 
@@ -448,13 +385,7 @@ public class PostListView implements View {
         if (!confirmed) {
             return;
         }
-        Async.run(() -> {
-            // Comments and reviews may live in MongoDB, where the PostgreSQL
-            // cascade cannot reach them, so they are removed explicitly first.
-            new org.example.bloggingplatformi.service.CommentService().deleteForPost(post.postId());
-            new org.example.bloggingplatformi.service.ReviewService().deleteForPost(post.postId());
-            return postService.delete(post.postId());
-        }, deleted -> load());
+        Async.run(() -> postService.delete(post.postId()), deleted -> load());
     }
 
     // -----------------------------------------------------------------
@@ -519,8 +450,14 @@ public class PostListView implements View {
             Button open = iconAction(Icons.EYE, "Open", "btn-ghost");
             open.setOnAction(event -> openDetail(post));
 
+            // Edit and Delete are only shown to the post's author and to the admin.
+            if (!Session.canEditPost(post.authorId())) {
+                setGraphic(Styles.row(2, open));
+                return;
+            }
+
             Button edit = iconAction(Icons.EDIT, "Edit", "btn-ghost");
-            edit.setOnAction(event -> shell.push(new PostEditorView(shell, post.postId())));
+            edit.setOnAction(event -> shell.push(new PostEditorController(shell, post.postId())));
 
             Button delete = iconAction(Icons.TRASH, "Delete", "btn-ghost");
             delete.setOnAction(event -> confirmDelete(post));
@@ -545,11 +482,11 @@ public class PostListView implements View {
         return flat.length() <= limit ? flat : flat.substring(0, limit - 1) + "…";
     }
 
-    /** Renders a combo item through one function; avoids six anonymous converters. */
-    private static final class SimpleConverter<T> extends javafx.util.StringConverter<T> {
-        private final java.util.function.Function<T, String> toText;
+    /** Shows a combo box item as text using the given function. */
+    private static final class SimpleConverter<T> extends StringConverter<T> {
+        private final Function<T, String> toText;
 
-        SimpleConverter(java.util.function.Function<T, String> toText) {
+        SimpleConverter(Function<T, String> toText) {
             this.toText = toText;
         }
 
@@ -560,7 +497,7 @@ public class PostListView implements View {
 
         @Override
         public T fromString(String string) {
-            // The combos are not editable, so nothing is ever parsed back.
+            // Not needed, because the combo boxes are not editable.
             return null;
         }
     }

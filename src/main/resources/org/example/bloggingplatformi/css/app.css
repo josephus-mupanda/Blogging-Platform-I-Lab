@@ -358,6 +358,11 @@
     -fx-font-size: 11.5px;
 }
 
+.form-success-text {
+    -fx-text-fill: -color-success;
+    -fx-font-size: 12px;
+}
+
 .field-label {
     -fx-font-size: 12px;
     -fx-font-weight: 600;

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+  Moderation screen (admin only): flagged and hidden comments waiting for a decision.
+  The rows of the queue are added by the controller.
+  Controller: org.example.bloggingplatformi.controller.ModerationController
+-->
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ScrollPane?>
+<?import javafx.scene.layout.VBox?>
+
+<ScrollPane xmlns="http://javafx.com/javafx" xmlns:fx="http://javafx.com/fxml"
+            fx:controller="org.example.bloggingplatformi.controller.ModerationController"
+            fitToWidth="true">
+    <VBox spacing="16">
+        <padding><Insets top="24" right="26" bottom="28" left="26"/></padding>
+
+        <VBox styleClass="card-flush">
+            <VBox spacing="3" styleClass="card-header">
+                <Label text="Flagged and hidden comments" styleClass="text-subtitle"/>
+                <Label fx:id="countLabel" styleClass="text-small"/>
+            </VBox>
+            <VBox>
+                <padding><Insets top="14" right="18" bottom="16" left="18"/></padding>
+                <!-- One row per comment, filled by the controller. -->
+                <VBox fx:id="queue" spacing="10"/>
+            </VBox>
+        </VBox>
+    </VBox>
+</ScrollPane>

@@ -1,4 +1,4 @@
-package org.example.bloggingplatformi.view;
+package org.example.bloggingplatformi.controller;
 
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -7,19 +7,17 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
-import javafx.geometry.Insets;
+import javafx.application.Platform;
+import javafx.fxml.FXML;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
-import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.HBox;
-import javafx.scene.layout.Priority;
-import javafx.scene.layout.VBox;
 
 import org.example.bloggingplatformi.exception.ValidationException;
 import org.example.bloggingplatformi.model.Post;
@@ -30,6 +28,7 @@ import org.example.bloggingplatformi.service.TagService;
 import org.example.bloggingplatformi.ui.AppShell;
 import org.example.bloggingplatformi.ui.Async;
 import org.example.bloggingplatformi.ui.Dialogs;
+import org.example.bloggingplatformi.ui.Fxml;
 import org.example.bloggingplatformi.ui.Icons;
 import org.example.bloggingplatformi.ui.Session;
 import org.example.bloggingplatformi.ui.Styles;
@@ -37,17 +36,11 @@ import org.example.bloggingplatformi.ui.View;
 import org.example.bloggingplatformi.util.Excerpts;
 
 /**
- * Create and edit a post.
- *
- * <p>Serves both cases from one screen: {@code postId == null} is a new post,
- * anything else loads and updates. The alternative — two near-identical forms —
- * drifts apart the moment a field is added to one of them.
- *
- * <p>Validation failures from the service are mapped back onto the field that
- * produced them, so the message appears under the input rather than in a dialog
- * the user has to dismiss before they can fix anything.
+ * Controller for post-editor.fxml: the form for creating or editing a post.
+ * If {@code postId} is null it creates a new post, otherwise it loads and updates that post.
+ * Validation errors are shown under the field they belong to.
  */
-public class PostEditorView implements View {
+public class PostEditorController implements View {
 
     private final AppShell shell;
     private final Long postId;
@@ -55,38 +48,50 @@ public class PostEditorView implements View {
     private final PostService postService = new PostService();
     private final TagService tagService = new TagService();
 
-    private final VBox root = new VBox(16);
+    private final Node root;
 
-    private final TextField titleField = new TextField();
-    private final TextArea bodyArea = new TextArea();
-    private final ComboBox<String> statusBox = new ComboBox<>();
-    private final ComboBox<String> tagInput = new ComboBox<>();
-    private final FlowPane tagChips = new FlowPane(7, 7);
-
-    private final Label titleError = errorLabel();
-    private final Label bodyError = errorLabel();
-
-    private final Label slugLabel = Styles.label("Generated on save", "text-mono");
-    private final Label excerptPreview = Styles.label("", "text-small");
-    private final Label metaLabel = Styles.label("", "text-small");
+    // Filled by FXMLLoader from the fx:id values in post-editor.fxml.
+    @FXML private TextField titleField;
+    @FXML private Label titleError;
+    @FXML private TextArea bodyArea;
+    @FXML private Label bodyError;
+    @FXML private ComboBox<String> statusBox;
+    @FXML private ComboBox<String> tagInput;
+    @FXML private FlowPane tagChips;
+    @FXML private Label slugLabel;
+    @FXML private Label excerptPreview;
+    @FXML private Label metaLabel;
 
     private final Set<String> selectedTags = new LinkedHashSet<>();
     private final Button saveButton = new Button("Save post");
 
     private Post loaded;
 
-    public PostEditorView(AppShell shell, Long postId) {
+    /** @param postId null for a new post, or the id of the post to edit */
+    public PostEditorController(AppShell shell, Long postId) {
         this.shell = shell;
         this.postId = postId;
+        this.root = Fxml.load("post-editor.fxml", this);
+    }
 
-        buildForm();
+    /** Called by FXMLLoader once the @FXML fields are filled. */
+    @FXML
+    private void initialize() {
+        // Typing in a field removes its error message.
+        titleField.textProperty().addListener((observable, old, text) -> clearError(titleField, titleError));
+        bodyArea.textProperty().addListener((observable, old, text) -> {
+            clearError(bodyArea, bodyError);
+            // Show a preview of the excerpt that will be saved with the post.
+            excerptPreview.setText(Excerpts.from(text, 160));
+        });
+
+        // Pressing Enter adds the typed tag, even if it is new. The service creates new tags on save.
+        tagInput.getEditor().setOnAction(event -> addTag(tagInput.getEditor().getText()));
     }
 
     @Override
     public Node getRoot() {
-        ScrollPane scroller = new ScrollPane(root);
-        scroller.setFitToWidth(true);
-        return scroller;
+        return root;
     }
 
     @Override
@@ -124,122 +129,17 @@ public class PostEditorView implements View {
     }
 
     // -----------------------------------------------------------------
-    // Form
-    // -----------------------------------------------------------------
-
-    private void buildForm() {
-        titleField.setPromptText("A clear, specific headline");
-        titleField.textProperty().addListener((observable, old, text) -> clearError(titleField, titleError));
-
-        bodyArea.setPromptText("Write the post…");
-        bodyArea.setWrapText(true);
-        bodyArea.setPrefRowCount(18);
-        bodyArea.textProperty().addListener((observable, old, text) -> {
-            clearError(bodyArea, bodyError);
-            // Live preview of the stored excerpt, so the denormalized column
-            // is not a surprise after saving.
-            excerptPreview.setText(Excerpts.from(text, 160));
-        });
-
-        statusBox.getItems().addAll("Draft", "Published", "Archived");
-        statusBox.setValue("Draft");
-        statusBox.setMaxWidth(Double.MAX_VALUE);
-
-        VBox main = Styles.card(
-                fieldGroup("Title", titleField, titleError),
-                fieldGroup("Content", bodyArea, bodyError));
-        HBox.setHgrow(main, Priority.ALWAYS);
-
-        VBox side = new VBox(16, buildPublishCard(), buildTagCard(), buildMetaCard());
-        // Narrow enough to leave the editor usable at the minimum window
-        // width, capped so it does not sprawl on a wide display.
-        side.setMinWidth(240);
-        side.setPrefWidth(300);
-        side.setMaxWidth(320);
-
-        HBox columns = new HBox(16, main, side);
-        root.getChildren().add(columns);
-        root.setPadding(new Insets(24, 26, 28, 26));
-    }
-
-    private VBox buildPublishCard() {
-        Label hint = Styles.label(
-                "A published post gets a publication date; drafts and archived posts do not.",
-                "text-caption");
-        hint.setWrapText(true);
-
-        return titledCard("Visibility",
-                fieldGroup("Status", statusBox, null),
-                hint);
-    }
-
-    private VBox buildTagCard() {
-        tagInput.setEditable(true);
-        tagInput.setPromptText("Add a tag and press Enter");
-        tagInput.setMaxWidth(Double.MAX_VALUE);
-
-        // Enter on the editor adds whatever was typed, whether or not it
-        // matches an existing tag: free-text tagging is the point, and the
-        // service creates anything new.
-        tagInput.getEditor().setOnAction(event -> addTag(tagInput.getEditor().getText()));
-        tagInput.setOnAction(event -> {
-            String value = tagInput.getValue();
-            if (value != null && !value.isBlank()) {
-                addTag(value);
-            }
-        });
-
-        Label hint = Styles.label("Names are lower-cased, so “Java” and “java” "
-                + "are the same tag.", "text-caption");
-        hint.setWrapText(true);
-
-        tagChips.setPrefWrapLength(230);
-
-        return titledCard("Tags", tagInput, tagChips, hint);
-    }
-
-    private VBox buildMetaCard() {
-        VBox slugBox = new VBox(3, Styles.label("URL slug", "field-label"), slugLabel);
-        slugLabel.setWrapText(true);
-
-        VBox excerptBox = new VBox(3, Styles.label("Excerpt preview", "field-label"), excerptPreview);
-        excerptPreview.setWrapText(true);
-
-        metaLabel.setWrapText(true);
-
-        return titledCard("Details", slugBox, excerptBox, metaLabel);
-    }
-
-    private VBox titledCard(String heading, Node... children) {
-        VBox card = new VBox(11);
-        card.getStyleClass().add("card");
-        card.getChildren().add(Styles.label(heading.toUpperCase(Locale.ENGLISH), "text-eyebrow"));
-        card.getChildren().addAll(children);
-        return card;
-    }
-
-    private VBox fieldGroup(String label, Node field, Label error) {
-        VBox group = new VBox(5, Styles.label(label, "field-label"), field);
-        if (error != null) {
-            group.getChildren().add(error);
-        }
-        if (field instanceof TextArea area) {
-            VBox.setVgrow(area, Priority.ALWAYS);
-        }
-        return group;
-    }
-
-    private static Label errorLabel() {
-        Label label = Styles.label("", "field-error-text");
-        label.setVisible(false);
-        label.setManaged(false);
-        label.setWrapText(true);
-        return label;
-    }
-
-    // -----------------------------------------------------------------
     // Tags
     // -----------------------------------------------------------------
+
+    /** A tag was chosen in the dropdown list (onAction="#tagPicked" in the FXML). */
+    @FXML
+    private void tagPicked() {
+        String value = tagInput.getValue();
+        if (value != null && !value.isBlank()) {
+            addTag(value);
+        }
+    }
 
     private void addTag(String raw) {
         if (raw == null || raw.isBlank()) {
@@ -249,8 +149,12 @@ public class PostEditorView implements View {
         if (selectedTags.add(normalized)) {
             renderChips();
         }
-        tagInput.getEditor().clear();
-        tagInput.setValue(null);
+        // Clear the box a moment later. Clearing it right away, while the
+        // dropdown list is still handling the mouse click, crashes JavaFX.
+        Platform.runLater(() -> {
+            tagInput.getEditor().clear();
+            tagInput.setValue(null);
+        });
     }
 
     private void renderChips() {
@@ -275,7 +179,7 @@ public class PostEditorView implements View {
     private void loadTagSuggestions() {
         Async.run(tagService::findAll,
                 tags -> tagInput.getItems().setAll(tags.stream().map(Tag::name).toList()),
-                error -> { /* suggestions are a convenience; free text still works */ });
+                error -> { /* no suggestions, but typing a tag still works */ });
     }
 
     // -----------------------------------------------------------------
@@ -313,8 +217,17 @@ public class PostEditorView implements View {
         clearError(bodyArea, bodyError);
 
         if (!Session.isSignedIn()) {
-            Dialogs.error("No user selected",
-                    "Choose a user in the top right before creating content.");
+            Dialogs.error("Not signed in",
+                    "Sign in before creating content.");
+            return;
+        }
+        if (!Session.canPublish()) {
+            Dialogs.error("Readers cannot write posts",
+                    "Only bloggers (authors) and admins can save a post. Sign in with a blogger account.");
+            return;
+        }
+        if (loaded != null && !Session.canEditPost(loaded.authorId())) {
+            Dialogs.error("Not your post", "Only the author of this post or an admin can change it.");
             return;
         }
 
@@ -328,10 +241,8 @@ public class PostEditorView implements View {
         List<String> tags = new ArrayList<>(selectedTags);
         long authorId = loaded != null ? loaded.authorId() : Session.currentUserId();
 
-        // Disabled for the duration, so a slow save cannot be submitted twice.
-        // The failure handler is explicit rather than using runDisabling,
-        // because a validation error belongs under the field that caused it
-        // rather than in a dialog the user must dismiss before fixing it.
+        // Disable Save while saving, so it cannot be clicked twice.
+        // We do not use runDisabling, because validation errors go under the fields, not in a dialog.
         saveButton.setDisable(true);
         Async.run(() -> postId == null
                         ? postService.create(authorId, title, body, status, tags)
@@ -351,7 +262,7 @@ public class PostEditorView implements View {
                 });
     }
 
-    /** A task failure arrives wrapped; the useful exception is one level down. */
+    /** A failed task can wrap the real exception, so this takes it out. */
     private static Throwable unwrap(Throwable error) {
         return (error != null && error.getCause() != null
                 && error.getClass() == RuntimeException.class)
@@ -359,7 +270,7 @@ public class PostEditorView implements View {
                 : error;
     }
 
-    /** Puts each service-reported problem under the input that caused it. */
+    /** Shows each validation error under the field it belongs to. */
     private void applyFieldErrors(ValidationException validation) {
         validation.getErrors().forEach((field, message) -> {
             switch (field) {

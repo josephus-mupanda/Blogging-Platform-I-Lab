@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+  Posts screen: a filter bar, the table of posts, and Previous / Next buttons.
+  The columns are declared here; what each cell shows is set in the controller.
+  Controller: org.example.bloggingplatformi.controller.PostListController
+-->
+
+<?import java.lang.String?>
+<?import javafx.collections.FXCollections?>
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.ComboBox?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.TableColumn?>
+<?import javafx.scene.control.TableView?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.layout.FlowPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.Region?>
+<?import javafx.scene.layout.StackPane?>
+<?import javafx.scene.layout.VBox?>
+
+<VBox xmlns="http://javafx.com/javafx" xmlns:fx="http://javafx.com/fxml"
+      fx:controller="org.example.bloggingplatformi.controller.PostListController"
+      spacing="16">
+    <padding><Insets top="24" right="26" bottom="28" left="26"/></padding>
+
+    <!-- ===================== Filter bar ===================== -->
+    <!-- A FlowPane instead of an HBox, so the controls wrap to a second line on a small screen. -->
+    <FlowPane fx:id="filterBar" hgap="10" vgap="10" alignment="CENTER_LEFT" styleClass="card">
+        <padding><Insets top="12" right="14" bottom="12" left="14"/></padding>
+
+        <!-- The search icon sits inside the field, in the left padding of .search-field. -->
+        <StackPane fx:id="searchBox">
+            <TextField fx:id="searchField" promptText="Search titles and content…"
+                       styleClass="search-field" prefWidth="300" minWidth="180"/>
+        </StackPane>
+
+        <ComboBox fx:id="authorFilter" prefWidth="165"/>
+        <ComboBox fx:id="tagFilter" prefWidth="150"/>
+
+        <!-- Hidden from readers: they only see published posts. -->
+        <ComboBox fx:id="statusFilter" prefWidth="140">
+            <items>
+                <FXCollections fx:factory="observableArrayList">
+                    <String fx:value="All statuses"/>
+                    <String fx:value="Published"/>
+                    <String fx:value="Draft"/>
+                    <String fx:value="Archived"/>
+                </FXCollections>
+            </items>
+            <value><String fx:value="All statuses"/></value>
+        </ComboBox>
+
+        <ComboBox fx:id="sortFilter" prefWidth="175"/>
+        <Button text="Clear" styleClass="btn-ghost, btn-small" onAction="#resetFilters"/>
+    </FlowPane>
+
+    <!-- ===================== Table and pager ===================== -->
+    <VBox styleClass="card-flush" VBox.vgrow="ALWAYS">
+        <TableView fx:id="table" VBox.vgrow="ALWAYS">
+            <placeholder>
+                <VBox spacing="6" alignment="CENTER" styleClass="empty-state">
+                    <Label text="No posts match these filters" styleClass="text-subtitle"/>
+                    <Label text="Try clearing the search box or widening the filters." styleClass="text-small"/>
+                </VBox>
+            </placeholder>
+            <columns>
+                <!-- The other columns have minimum widths, so in a narrow table the title shrinks first. -->
+                <TableColumn fx:id="titleColumn" text="TITLE" prefWidth="340" minWidth="200" sortable="false"/>
+                <TableColumn fx:id="authorColumn" text="AUTHOR" prefWidth="170" minWidth="150" sortable="false"/>
+                <TableColumn fx:id="statusColumn" text="STATUS" prefWidth="110" minWidth="110" sortable="false"/>
+                <TableColumn fx:id="engagementColumn" text="ENGAGEMENT" prefWidth="200" minWidth="195" sortable="false"/>
+                <TableColumn fx:id="ratingColumn" text="RATING" prefWidth="100" minWidth="85" sortable="false"/>
+                <TableColumn fx:id="actionsColumn" text="" prefWidth="130" minWidth="125" sortable="false"/>
+            </columns>
+        </TableView>
+
+        <HBox spacing="8" alignment="CENTER_LEFT" styleClass="card-footer">
+            <!-- minWidth 0: the label can be cut short, so it does not push the buttons off screen. -->
+            <Label fx:id="rangeLabel" styleClass="text-small" minWidth="0"/>
+            <Region HBox.hgrow="ALWAYS"/>
+            <Button fx:id="previousButton" text="Previous" styleClass="btn-secondary, btn-small"
+                    onAction="#previousPage"/>
+            <Button fx:id="nextButton" text="Next" styleClass="btn-secondary, btn-small"
+                    onAction="#nextPage"/>
+        </HBox>
+    </VBox>
+</VBox>

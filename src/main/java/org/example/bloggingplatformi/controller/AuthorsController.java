@@ -1,10 +1,12 @@
-package org.example.bloggingplatformi.view;
+package org.example.bloggingplatformi.controller;
 
 import java.util.List;
 
+import javafx.beans.property.SimpleObjectProperty;
+import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
-import javafx.geometry.Insets;
+import javafx.fxml.FXML;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
@@ -13,7 +15,6 @@ import javafx.scene.control.TableCell;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.layout.HBox;
-import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 
 import org.example.bloggingplatformi.model.Role;
@@ -22,40 +23,35 @@ import org.example.bloggingplatformi.service.UserService;
 import org.example.bloggingplatformi.ui.AppShell;
 import org.example.bloggingplatformi.ui.Async;
 import org.example.bloggingplatformi.ui.Dialogs;
+import org.example.bloggingplatformi.ui.Fxml;
 import org.example.bloggingplatformi.ui.Icons;
 import org.example.bloggingplatformi.ui.Styles;
 import org.example.bloggingplatformi.ui.View;
 
 /**
- * The account list.
- *
- * <p>Deactivating is offered; deleting is not. The schema cascades a user's
- * posts away with them, so a mis-click here would silently destroy content,
- * and {@code is_active} exists precisely so that is not the only option.
+ * Controller for authors.fxml (admin only): a table of all user accounts.
+ * Users can be deactivated but not deleted, because deleting a user also deletes their posts.
  */
-public class AuthorsView implements View {
+public class AuthorsController implements View {
 
     private static final int PAGE_SIZE = 100;
 
     private final AppShell shell;
     private final UserService userService = new UserService();
-
-    private final VBox root = new VBox(16);
-    private final TableView<User> table = new TableView<>();
     private final ObservableList<User> rows = FXCollections.observableArrayList();
+    private final Node root;
 
-    public AuthorsView(AppShell shell) {
+    // Filled by FXMLLoader from the fx:id values in authors.fxml.
+    @FXML private TableView<User> table;
+    @FXML private TableColumn<User, User> personColumn;
+    @FXML private TableColumn<User, String> emailColumn;
+    @FXML private TableColumn<User, Role> roleColumn;
+    @FXML private TableColumn<User, User> statusColumn;
+    @FXML private TableColumn<User, User> actionsColumn;
+
+    public AuthorsController(AppShell shell) {
         this.shell = shell;
-
-        buildTable();
-
-        VBox card = new VBox(table);
-        card.getStyleClass().add("card-flush");
-        VBox.setVgrow(table, Priority.ALWAYS);
-
-        root.getChildren().add(card);
-        root.setPadding(new Insets(24, 26, 28, 26));
-        VBox.setVgrow(card, Priority.ALWAYS);
+        this.root = Fxml.load("authors.fxml", this);
     }
 
     @Override
@@ -88,27 +84,21 @@ public class AuthorsView implements View {
         load();
     }
 
-    private void buildTable() {
+    /** Says what each table column shows. Called by FXMLLoader after the fields are filled. */
+    @FXML
+    private void initialize() {
         table.setItems(rows);
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
-        table.setPlaceholder(Styles.label("No accounts found.", "text-small"));
 
-        TableColumn<User, User> personColumn = new TableColumn<>("ACCOUNT");
         personColumn.setCellValueFactory(data ->
-                new javafx.beans.property.SimpleObjectProperty<>(data.getValue()));
+                new SimpleObjectProperty<>(data.getValue()));
         personColumn.setCellFactory(column -> new PersonCell());
-        personColumn.setPrefWidth(280);
-        personColumn.setSortable(false);
 
-        TableColumn<User, String> emailColumn = new TableColumn<>("EMAIL");
         emailColumn.setCellValueFactory(data ->
-                new javafx.beans.property.SimpleStringProperty(data.getValue().email()));
-        emailColumn.setPrefWidth(240);
-        emailColumn.setSortable(false);
+                new SimpleStringProperty(data.getValue().email()));
 
-        TableColumn<User, Role> roleColumn = new TableColumn<>("ROLE");
         roleColumn.setCellValueFactory(data ->
-                new javafx.beans.property.SimpleObjectProperty<>(data.getValue().role()));
+                new SimpleObjectProperty<>(data.getValue().role()));
         roleColumn.setCellFactory(column -> new TableCell<>() {
             @Override
             protected void updateItem(Role role, boolean empty) {
@@ -116,12 +106,9 @@ public class AuthorsView implements View {
                 setGraphic(empty || role == null ? null : Styles.roleBadge(role));
             }
         });
-        roleColumn.setPrefWidth(110);
-        roleColumn.setSortable(false);
 
-        TableColumn<User, User> statusColumn = new TableColumn<>("STATUS");
         statusColumn.setCellValueFactory(data ->
-                new javafx.beans.property.SimpleObjectProperty<>(data.getValue()));
+                new SimpleObjectProperty<>(data.getValue()));
         statusColumn.setCellFactory(column -> new TableCell<>() {
             @Override
             protected void updateItem(User user, boolean empty) {
@@ -135,18 +122,10 @@ public class AuthorsView implements View {
                         : Styles.badge("Deactivated", "neutral"));
             }
         });
-        statusColumn.setPrefWidth(120);
-        statusColumn.setSortable(false);
 
-        TableColumn<User, User> actionsColumn = new TableColumn<>("");
         actionsColumn.setCellValueFactory(data ->
-                new javafx.beans.property.SimpleObjectProperty<>(data.getValue()));
+                new SimpleObjectProperty<>(data.getValue()));
         actionsColumn.setCellFactory(column -> new ActionsCell());
-        actionsColumn.setPrefWidth(190);
-        actionsColumn.setSortable(false);
-
-        table.getColumns().setAll(List.of(personColumn, emailColumn, roleColumn,
-                statusColumn, actionsColumn));
     }
 
     private void load() {

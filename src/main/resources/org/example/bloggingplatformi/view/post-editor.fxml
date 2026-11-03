@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+  Post editor: the same form creates a new post or edits an existing one.
+  Left: title and content. Right: status, tags and details.
+  The Save and Cancel buttons are in the top bar (see actions() in the controller).
+  Controller: org.example.bloggingplatformi.controller.PostEditorController
+-->
+
+<?import java.lang.String?>
+<?import javafx.collections.FXCollections?>
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.ComboBox?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ScrollPane?>
+<?import javafx.scene.control.TextArea?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.layout.FlowPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.VBox?>
+
+<ScrollPane xmlns="http://javafx.com/javafx" xmlns:fx="http://javafx.com/fxml"
+            fx:controller="org.example.bloggingplatformi.controller.PostEditorController"
+            fitToWidth="true">
+    <VBox spacing="16">
+        <padding><Insets top="24" right="26" bottom="28" left="26"/></padding>
+
+        <HBox spacing="16">
+
+            <!-- ===================== Main column: title and content ===================== -->
+            <VBox spacing="12" styleClass="card" HBox.hgrow="ALWAYS">
+                <VBox spacing="5">
+                    <Label text="Title" styleClass="field-label"/>
+                    <TextField fx:id="titleField" promptText="A clear, specific headline"/>
+                    <!-- Validation message, shown under the field when the title is wrong. -->
+                    <Label fx:id="titleError" styleClass="field-error-text" wrapText="true"
+                           visible="false" managed="false"/>
+                </VBox>
+                <VBox spacing="5" VBox.vgrow="ALWAYS">
+                    <Label text="Content" styleClass="field-label"/>
+                    <TextArea fx:id="bodyArea" promptText="Write the post…" wrapText="true"
+                              prefRowCount="18" VBox.vgrow="ALWAYS"/>
+                    <Label fx:id="bodyError" styleClass="field-error-text" wrapText="true"
+                           visible="false" managed="false"/>
+                </VBox>
+            </VBox>
+
+            <!-- ===================== Side column (240 to 320 px wide) ===================== -->
+            <VBox spacing="16" minWidth="240" prefWidth="300" maxWidth="320">
+
+                <VBox spacing="11" styleClass="card">
+                    <Label text="VISIBILITY" styleClass="text-eyebrow"/>
+                    <VBox spacing="5">
+                        <Label text="Status" styleClass="field-label"/>
+                        <ComboBox fx:id="statusBox" maxWidth="Infinity">
+                            <items>
+                                <FXCollections fx:factory="observableArrayList">
+                                    <String fx:value="Draft"/>
+                                    <String fx:value="Published"/>
+                                    <String fx:value="Archived"/>
+                                </FXCollections>
+                            </items>
+                            <value><String fx:value="Draft"/></value>
+                        </ComboBox>
+                    </VBox>
+                    <Label text="A published post gets a publication date; drafts and archived posts do not."
+                           styleClass="text-caption" wrapText="true"/>
+                </VBox>
+
+                <VBox spacing="11" styleClass="card">
+                    <Label text="TAGS" styleClass="text-eyebrow"/>
+                    <!-- Editable: type a new tag and press Enter, or pick an existing one. -->
+                    <ComboBox fx:id="tagInput" editable="true" promptText="Add a tag and press Enter"
+                              maxWidth="Infinity" onAction="#tagPicked"/>
+                    <!-- One chip per chosen tag, filled by the controller. -->
+                    <FlowPane fx:id="tagChips" hgap="7" vgap="7" prefWrapLength="230"/>
+                    <Label text="Names are lower-cased, so “Java” and “java” are the same tag."
+                           styleClass="text-caption" wrapText="true"/>
+                </VBox>
+
+                <VBox spacing="11" styleClass="card">
+                    <Label text="DETAILS" styleClass="text-eyebrow"/>
+                    <VBox spacing="3">
+                        <Label text="URL slug" styleClass="field-label"/>
+                        <Label fx:id="slugLabel" text="Generated on save" styleClass="text-mono" wrapText="true"/>
+                    </VBox>
+                    <VBox spacing="3">
+                        <Label text="Excerpt preview" styleClass="field-label"/>
+                        <Label fx:id="excerptPreview" styleClass="text-small" wrapText="true"/>
+                    </VBox>
+                    <Label fx:id="metaLabel" styleClass="text-small" wrapText="true"/>
+                </VBox>
+            </VBox>
+        </HBox>
+    </VBox>
+</ScrollPane>

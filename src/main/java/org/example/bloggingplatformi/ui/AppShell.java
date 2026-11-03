@@ -3,17 +3,14 @@ package org.example.bloggingplatformi.ui;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
 
-import javafx.geometry.Insets;
+import javafx.fxml.FXML;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
-import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
-import javafx.scene.control.ListCell;
 import javafx.scene.control.Tooltip;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
@@ -26,69 +23,106 @@ import javafx.util.Duration;
 import org.example.bloggingplatformi.model.User;
 
 /**
- * The application frame: a fixed sidebar, a top bar that reflects the current
- * screen, and a content host that swaps views.
- *
- * <p>Keeping navigation, the heading and the action bar here means a screen
- * only has to describe itself through {@link View}. Adding one is a matter of
- * registering a supplier, not re-creating a layout.
+ * Controller for main.fxml: the main window shown after sign in.
+ * It has a sidebar menu, a top bar for the current screen, and a content area
+ * that swaps between screens. It also handles navigation and the back button.
  */
 public final class AppShell {
 
-    /** Sidebar destinations, in display order within their group. */
+    /**
+     * The sidebar items. The "Manage" items are for the admin only;
+     * other users do not see them at all.
+     */
     public enum Destination {
-        DASHBOARD("Dashboard", Icons.DASHBOARD, "Workspace"),
-        POSTS("Posts", Icons.ARTICLE, "Workspace"),
-        MODERATION("Moderation", Icons.SHIELD, "Manage"),
-        AUTHORS("Authors", Icons.PERSON, "Manage"),
-        TAGS("Tags", Icons.TAG, "Manage");
+        DASHBOARD(false),
+        POSTS(false),
+        MODERATION(true),
+        AUTHORS(true),
+        TAGS(true);
 
-        final String label;
-        final String icon;
-        final String group;
+        final boolean adminOnly;
 
-        Destination(String label, String icon, String group) {
-            this.label = label;
-            this.icon = icon;
-            this.group = group;
+        Destination(boolean adminOnly) {
+            this.adminOnly = adminOnly;
+        }
+
+        /** True if the signed-in user may open this screen. */
+        boolean isAllowed() {
+            return !adminOnly || Session.canModerate();
         }
     }
 
-    private final BorderPane root = new BorderPane();
-    private final StackPane contentHost = new StackPane();
-    private final VBox navItems = new VBox(3);
+    private final BorderPane root;
+    private final Runnable onSignOut;
 
-    private final Label headingLabel = Styles.label("", "text-title");
-    private final Label subheadingLabel = Styles.label("", "text-small");
-    private final VBox headingBox = new VBox(1, headingLabel, subheadingLabel);
-    private final HBox actionBar = new HBox(9);
+    // Filled by FXMLLoader from the fx:id values in main.fxml.
+    @FXML private Button dashboardNav;
+    @FXML private Button postsNav;
+    @FXML private VBox manageSection;
+    @FXML private Button moderationNav;
+    @FXML private Button authorsNav;
+    @FXML private Button tagsNav;
+    @FXML private Button backButton;
+    @FXML private Label headingLabel;
+    @FXML private Label subheadingLabel;
+    @FXML private HBox actionBar;
+    @FXML private StackPane avatarSlot;
+    @FXML private Label userNameLabel;
+    @FXML private Label userRoleLabel;
+    @FXML private VBox bannerSlot;
+    @FXML private StackPane contentHost;
 
     private final Map<Destination, Supplier<View>> routes = new LinkedHashMap<>();
     private final Map<Destination, Button> navButtons = new LinkedHashMap<>();
 
     /**
-     * Previously shown views, for the back button.
-     *
-     * <p>Instances are kept rather than rebuilt, so returning to a list
-     * restores the filters and page the user left it on. {@link View#onShow()}
-     * refreshes the data, so stale rows are not the price of that.
+     * Views shown before, for the back button.
+     * The same objects are kept, so going back keeps the user's filters and page.
      */
     private final Deque<View> history = new ArrayDeque<>();
 
     private View currentView;
     private Destination currentDestination;
-    private final Button backButton;
-    private final ComboBox<User> userSwitcher = new ComboBox<>();
-    private final VBox bannerSlot = new VBox();
 
-    public AppShell() {
-        backButton = iconButton(Icons.BACK, "Back", "btn-ghost");
-        backButton.setOnAction(event -> back());
-        backButton.setVisible(false);
-        backButton.setManaged(false);
+    /**
+     * Builds the main window for the user who is signed in ({@link Session}).
+     * A new shell is made after every sign in, so nothing from the last user is kept.
+     *
+     * @param onSignOut called when the user confirms "Sign out"
+     */
+    public AppShell(Runnable onSignOut) {
+        this.onSignOut = onSignOut;
+        this.root = Fxml.load("main.fxml", this);
+    }
 
-        root.setLeft(buildSidebar());
-        root.setCenter(buildMain());
+    /** Called by FXMLLoader once the @FXML fields are filled. */
+    @FXML
+    private void initialize() {
+        navButtons.put(Destination.DASHBOARD, dashboardNav);
+        navButtons.put(Destination.POSTS, postsNav);
+        navButtons.put(Destination.MODERATION, moderationNav);
+        navButtons.put(Destination.AUTHORS, authorsNav);
+        navButtons.put(Destination.TAGS, tagsNav);
+
+        // Icons are SVG paths kept in Icons.java, so they are added here and not in the FXML.
+        dashboardNav.setGraphic(Icons.of(Icons.DASHBOARD, 17));
+        postsNav.setGraphic(Icons.of(Icons.ARTICLE, 17));
+        moderationNav.setGraphic(Icons.of(Icons.SHIELD, 17));
+        authorsNav.setGraphic(Icons.of(Icons.PERSON, 17));
+        tagsNav.setGraphic(Icons.of(Icons.TAG, 17));
+        backButton.setGraphic(Icons.of(Icons.BACK, 17));
+        backButton.setTooltip(tooltip("Back"));
+
+        // The Manage section is not shown at all to bloggers and readers.
+        boolean admin = Session.canModerate();
+        manageSection.setVisible(admin);
+        manageSection.setManaged(admin);
+
+        // Who is signed in, in the top-right corner.
+        User user = Session.currentUser().orElseThrow();
+        avatarSlot.getChildren().setAll(Styles.avatar(user.displayName(), true));
+        userNameLabel.setText(user.displayName());
+        userRoleLabel.setText(user.role().name().toLowerCase());
     }
 
     public BorderPane getRoot() {
@@ -100,180 +134,24 @@ public final class AppShell {
     }
 
     // -----------------------------------------------------------------
-    // Sidebar
+    // Menu and top bar buttons (onAction="#..." in main.fxml)
     // -----------------------------------------------------------------
 
-    private VBox buildSidebar() {
-        VBox sidebar = new VBox();
-        sidebar.getStyleClass().add("sidebar");
+    @FXML private void openDashboard() { navigate(Destination.DASHBOARD); }
 
-        sidebar.getChildren().add(buildBrand());
+    @FXML private void openPosts() { navigate(Destination.POSTS); }
 
-        String lastGroup = null;
-        VBox group = new VBox(3);
-        group.setPadding(new Insets(0, 12, 0, 12));
+    @FXML private void openModeration() { navigate(Destination.MODERATION); }
 
-        for (Destination destination : Destination.values()) {
-            if (!destination.group.equals(lastGroup)) {
-                Label sectionLabel = new Label(destination.group.toUpperCase());
-                sectionLabel.getStyleClass().add("sidebar-section-label");
-                group.getChildren().add(sectionLabel);
-                lastGroup = destination.group;
-            }
-            Button button = buildNavButton(destination);
-            navButtons.put(destination, button);
-            group.getChildren().add(button);
-        }
+    @FXML private void openAuthors() { navigate(Destination.AUTHORS); }
 
-        navItems.getChildren().add(group);
-        sidebar.getChildren().add(navItems);
-        sidebar.getChildren().add(Styles.verticalSpacer());
-        sidebar.getChildren().add(buildSidebarFooter());
+    @FXML private void openTags() { navigate(Destination.TAGS); }
 
-        return sidebar;
-    }
-
-    private HBox buildBrand() {
-        StackPane mark = new StackPane(new Label("B"));
-        mark.getStyleClass().add("sidebar-brand-mark");
-
-        Label name = Styles.label("Blogfold", "sidebar-brand-title");
-        Label tagline = Styles.label("Content workspace", "sidebar-brand-subtitle");
-
-        HBox brand = new HBox(11, mark, new VBox(0, name, tagline));
-        brand.setAlignment(Pos.CENTER_LEFT);
-        brand.getStyleClass().add("sidebar-brand");
-        return brand;
-    }
-
-    private Button buildNavButton(Destination destination) {
-        Button button = new Button(destination.label);
-        button.setGraphic(Icons.of(destination.icon, 17));
-        button.getStyleClass().add("nav-item");
-        button.setMaxWidth(Double.MAX_VALUE);
-        button.setAlignment(Pos.CENTER_LEFT);
-        button.setOnAction(event -> navigate(destination));
-        return button;
-    }
-
-    private VBox buildSidebarFooter() {
-        Label store = Styles.label("", "sidebar-brand-subtitle");
-        store.setText("Comments store: " + storeLabel());
-
-        HBox line = new HBox(8, Icons.of(Icons.DATABASE, 14), store);
-        line.setAlignment(Pos.CENTER_LEFT);
-
-        VBox footer = new VBox(6, line);
-        footer.getStyleClass().add("sidebar-footer");
-        return footer;
-    }
-
-    private String storeLabel() {
-        try {
-            return org.example.bloggingplatformi.dao.DaoFactory.commentStore().name();
-        } catch (RuntimeException e) {
-            // Configuration problems must not stop the window from opening.
-            return "unknown";
-        }
-    }
-
-    // -----------------------------------------------------------------
-    // Main area
-    // -----------------------------------------------------------------
-
-    private VBox buildMain() {
-        VBox main = new VBox(buildTopBar(), bannerSlot, contentHost);
-        main.getStyleClass().add("content-area");
-        VBox.setVgrow(contentHost, Priority.ALWAYS);
-
-        bannerSlot.setPadding(new Insets(16, 26, 0, 26));
-        bannerSlot.setVisible(false);
-        bannerSlot.setManaged(false);
-
-        return main;
-    }
-
-    private HBox buildTopBar() {
-        subheadingLabel.setVisible(false);
-        subheadingLabel.setManaged(false);
-        headingBox.setAlignment(Pos.CENTER_LEFT);
-
-        configureUserSwitcher();
-
-        HBox topBar = new HBox(12, backButton, headingBox, Styles.spacer(), actionBar,
-                buildUserArea());
-        topBar.setAlignment(Pos.CENTER_LEFT);
-        topBar.getStyleClass().add("topbar");
-        actionBar.setAlignment(Pos.CENTER_RIGHT);
-        return topBar;
-    }
-
-    private HBox buildUserArea() {
-        HBox area = new HBox(9, userSwitcher);
-        area.setAlignment(Pos.CENTER_RIGHT);
-        area.setPadding(new Insets(0, 0, 0, 10));
-        return area;
-    }
-
-    private void configureUserSwitcher() {
-        userSwitcher.setPrefWidth(210);
-        userSwitcher.setPromptText("Select a user");
-        userSwitcher.setButtonCell(userCell());
-        userSwitcher.setCellFactory(list -> userCell());
-        userSwitcher.setTooltip(tooltip(
-                "Acts as this user when creating posts, comments and reviews."));
-
-        userSwitcher.valueProperty().addListener((observable, previous, selected) -> {
-            if (selected != null) {
-                Session.setCurrentUser(selected);
-                // Permission-sensitive items (the moderation entry) depend on
-                // the acting user's role, so the sidebar is re-evaluated.
-                refreshPermissions();
-            }
-        });
-    }
-
-    private ListCell<User> userCell() {
-        return new ListCell<>() {
-            @Override
-            protected void updateItem(User user, boolean empty) {
-                super.updateItem(user, empty);
-                if (empty || user == null) {
-                    setText(null);
-                    setGraphic(null);
-                    return;
-                }
-                Label name = Styles.label(user.displayName(), "text-body");
-                Label role = Styles.label(user.role().name().toLowerCase(), "text-caption");
-                HBox cell = new HBox(8, Styles.avatar(user.displayName(), true),
-                        new VBox(0, name, role));
-                cell.setAlignment(Pos.CENTER_LEFT);
-                setGraphic(cell);
-                setText(null);
-            }
-        };
-    }
-
-    public void setUsers(List<User> users) {
-        userSwitcher.getItems().setAll(users);
-        if (!users.isEmpty() && userSwitcher.getValue() == null) {
-            // Prefer an account that can actually author posts, so the app
-            // opens in a state where the primary action works.
-            User preferred = users.stream()
-                    .filter(user -> user.role().canModerate())
-                    .findFirst()
-                    .orElse(users.get(0));
-            userSwitcher.setValue(preferred);
-        }
-    }
-
-    private void refreshPermissions() {
-        Button moderation = navButtons.get(Destination.MODERATION);
-        if (moderation != null) {
-            boolean allowed = Session.canModerate();
-            moderation.setDisable(!allowed);
-            moderation.setTooltip(allowed ? null
-                    : tooltip("Only an admin can open the moderation queue."));
+    @FXML
+    private void signOut() {
+        String name = Session.currentDisplayName();
+        if (Dialogs.confirm("Sign out", "Do you want to sign out, " + name + "?", "Sign out")) {
+            onSignOut.run();
         }
     }
 
@@ -281,16 +159,15 @@ public final class AppShell {
     // Banner
     // -----------------------------------------------------------------
 
-    /** Shows a persistent message above the content, such as a lost connection. */
+    /** Shows a message above the content that stays until cleared, such as a lost connection. */
     public void showBanner(String headline, String detail, boolean isError) {
         Label title = Styles.label(headline, "text-subtitle");
         Label body = Styles.label(detail, "text-small");
         body.setWrapText(true);
         title.setWrapText(true);
 
-        // Without the grow constraint the VBox takes its preferred width,
-        // which for a long message is wider than the window, and the banner
-        // pushes the whole content area into a horizontal scroll.
+        // Let the text grow to the available width, so a long message wraps
+        // instead of making the window scroll sideways.
         VBox text = new VBox(2, title, body);
         text.setMaxWidth(Double.MAX_VALUE);
         HBox.setHgrow(text, Priority.ALWAYS);
@@ -298,10 +175,7 @@ public final class AppShell {
         HBox banner = new HBox(12, Icons.of(Icons.DATABASE, 18), text);
         banner.setMaxWidth(Double.MAX_VALUE);
 
-        // A wrapped Label nested inside VBoxes is measured at its single-line
-        // height and then clipped, which is what reduced the whole message to
-        // one ellipsised line. USE_PREF_SIZE makes every container along the
-        // way honour the wrapped height instead.
+        // USE_PREF_SIZE stops the wrapped text being cut down to one line.
         title.setMinHeight(Region.USE_PREF_SIZE);
         body.setMinHeight(Region.USE_PREF_SIZE);
         text.setMinHeight(Region.USE_PREF_SIZE);
@@ -329,7 +203,7 @@ public final class AppShell {
     /** Switches to a top-level destination, clearing the back history. */
     public void navigate(Destination destination) {
         Supplier<View> factory = routes.get(destination);
-        if (factory == null) {
+        if (factory == null || !destination.isAllowed()) {
             return;
         }
         history.clear();
@@ -346,6 +220,7 @@ public final class AppShell {
         show(view, true);
     }
 
+    @FXML
     public void back() {
         if (history.isEmpty()) {
             if (currentDestination != null) {
@@ -357,14 +232,14 @@ public final class AppShell {
     }
 
     /**
-     * Re-reads the heading of {@code view} if it is still the one on screen.
-     *
-     * <p>For views whose title depends on data they load, such as a post's
-     * detail screen: the heading is first set before that data arrives.
+     * Updates the heading if {@code view} is still on screen.
+     * Used when the title depends on data that loads later, like a post title.
      */
     public void refreshHeading(View view) {
         if (view == currentView) {
             applyHeading(view);
+            // The buttons can depend on the loaded data too (for example, who wrote the post).
+            actionBar.getChildren().setAll(view.actions());
         }
     }
 
@@ -390,7 +265,7 @@ public final class AppShell {
 
         contentHost.getChildren().setAll(view.getRoot());
 
-        // After the node is in the scene, so a view can measure or focus.
+        // Called after the view is added, so it can load data and set focus.
         view.onShow();
     }
 
@@ -407,26 +282,17 @@ public final class AppShell {
     // Small helpers
     // -----------------------------------------------------------------
 
-    private Button iconButton(String icon, String tooltipText, String styleClass) {
-        Button button = new Button();
-        button.setGraphic(Icons.of(icon, 17));
-        button.getStyleClass().addAll(styleClass, "btn-small");
-        button.setTooltip(tooltip(tooltipText));
-        return button;
-    }
-
-    /** Shared tooltip factory; the views in the {@code view} package use it too. */
+    /** Creates a tooltip. The views use it too. */
     public static Tooltip tooltip(String text) {
         Tooltip tooltip = new Tooltip(text);
-        // The platform default is a second and a half, which is long enough
-        // that people assume there is no tooltip.
+        // The default delay is 1.5 seconds, which feels too slow.
         tooltip.setShowDelay(Duration.millis(350));
         tooltip.setWrapText(true);
         tooltip.setMaxWidth(260);
         return tooltip;
     }
 
-    /** Exposed so views can offer a "go to posts" action from an empty state. */
+    /** Public so views can add a button like "Go to posts" to an empty screen. */
     public Node buildPrimaryButton(String text, String icon, Runnable action) {
         Button button = new Button(text);
         button.setGraphic(Icons.of(icon, 16));

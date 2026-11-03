@@ -1,22 +1,21 @@
-package org.example.bloggingplatformi.view;
+package org.example.bloggingplatformi.controller;
 
 import java.util.List;
 import java.util.Map;
 
+import javafx.fxml.FXML;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
-import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
-import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 
 import org.example.bloggingplatformi.model.Comment;
@@ -30,21 +29,18 @@ import org.example.bloggingplatformi.service.ReviewService;
 import org.example.bloggingplatformi.ui.AppShell;
 import org.example.bloggingplatformi.ui.Async;
 import org.example.bloggingplatformi.ui.Dialogs;
+import org.example.bloggingplatformi.ui.Fxml;
 import org.example.bloggingplatformi.ui.Icons;
 import org.example.bloggingplatformi.ui.Session;
 import org.example.bloggingplatformi.ui.Styles;
 import org.example.bloggingplatformi.ui.View;
 
 /**
- * One post in full: body, threaded comments and reviews.
- *
- * <p>This is the screen where the polyglot design is visible at runtime. The
- * post comes from PostgreSQL; the comments and reviews come from whichever
- * store {@code app.comments.store} selects, and the panel header says which
- * one so a demo can switch between them and show the same UI working against
- * either engine.
+ * Shows one post with its comments and reviews.
+ * The post comes from PostgreSQL. Comments and reviews come from the store set in
+ * {@code app.comments.store}, and the panel header shows which one.
  */
-public class PostDetailView implements View {
+public class PostDetailController implements View {
 
     private static final int INDENT_PER_LEVEL = 26;
     private static final int MAX_VISUAL_DEPTH = 6;
@@ -56,31 +52,34 @@ public class PostDetailView implements View {
     private final CommentService commentService = new CommentService();
     private final ReviewService reviewService = new ReviewService();
 
-    private final VBox root = new VBox(16);
-    private final VBox articleCard = new VBox(14);
-    private final VBox commentList = new VBox(9);
-    private final VBox reviewList = new VBox(9);
-    private final VBox ratingSummary = new VBox(8);
+    /** The post's tags, shown inside the article card once the post has loaded. */
     private final FlowPane tagRow = new FlowPane(7, 7);
+    private final Node root;
 
-    private final TextArea commentInput = new TextArea();
-    private final Label commentStoreLabel = Styles.label("", "text-caption");
-    private final Label reviewStoreLabel = Styles.label("", "text-caption");
+    // Filled by FXMLLoader from the fx:id values in post-detail.fxml.
+    @FXML private VBox articleCard;
+    @FXML private Label commentStoreLabel;
+    @FXML private VBox commentList;
+    @FXML private TextArea commentInput;
+    @FXML private Button commentButton;
+    @FXML private VBox ratingSummary;
+    @FXML private Label reviewStoreLabel;
+    @FXML private VBox reviewList;
+    @FXML private ComboBox<Integer> ratingBox;
+    @FXML private TextField reviewHeadline;
+    @FXML private Button reviewButton;
 
     private Post post;
 
-    public PostDetailView(AppShell shell, long postId) {
+    public PostDetailController(AppShell shell, long postId) {
         this.shell = shell;
         this.postId = postId;
-
-        buildLayout();
+        this.root = Fxml.load("post-detail.fxml", this);
     }
 
     @Override
     public Node getRoot() {
-        ScrollPane scroller = new ScrollPane(root);
-        scroller.setFitToWidth(true);
-        return scroller;
+        return root;
     }
 
     @Override
@@ -90,10 +89,15 @@ public class PostDetailView implements View {
 
     @Override
     public List<Node> actions() {
+        // Only the post's author and the admin get the Edit button.
+        // Until the post has loaded we do not know the author, so no button is shown yet.
+        if (post == null || !Session.canEditPost(post.authorId())) {
+            return List.of();
+        }
         Button edit = new Button("Edit");
         edit.setGraphic(Icons.of(Icons.EDIT, 15));
         edit.getStyleClass().addAll("btn-secondary", "btn-small");
-        edit.setOnAction(event -> shell.push(new PostEditorView(shell, postId)));
+        edit.setOnAction(event -> shell.push(new PostEditorController(shell, postId)));
         return List.of(edit);
     }
 
@@ -103,99 +107,24 @@ public class PostDetailView implements View {
         loadComments();
         loadReviews();
 
-        // Fire-and-forget: a failed counter increment must not interrupt
-        // someone reading, and the UPDATE is atomic in SQL so there is no
-        // read-modify-write to race.
+        // Count the view in the background. If it fails, the user is not told.
         Async.runQuietly(() -> postService.recordView(postId));
     }
 
     // -----------------------------------------------------------------
-    // Layout
+    // Buttons from the FXML (onAction="#...")
     // -----------------------------------------------------------------
 
-    private void buildLayout() {
-        articleCard.getStyleClass().add("card");
-
-        VBox left = new VBox(16, articleCard, buildCommentsCard());
-        HBox.setHgrow(left, Priority.ALWAYS);
-
-        VBox right = new VBox(16, buildRatingCard(), buildReviewsCard());
-        right.setMinWidth(260);
-        right.setPrefWidth(320);
-        right.setMaxWidth(340);
-
-        root.getChildren().add(new HBox(16, left, right));
-        root.setPadding(new Insets(24, 26, 28, 26));
+    /** The "Comment" button: a new top-level comment (no parent). */
+    @FXML
+    private void postComment() {
+        submitComment(null, commentInput, commentButton);
     }
 
-    private VBox buildCommentsCard() {
-        commentInput.setPromptText("Add a comment…");
-        commentInput.setWrapText(true);
-        commentInput.setPrefRowCount(3);
-
-        Button post = new Button("Comment");
-        post.getStyleClass().addAll("btn-primary", "btn-small");
-        post.setOnAction(event -> submitComment(null, commentInput, post));
-
-        HBox composer = Styles.row(9, Styles.spacer(), post);
-
-        VBox header = new VBox(3,
-                Styles.subtitle("Discussion"),
-                commentStoreLabel);
-        header.getStyleClass().add("card-header");
-
-        VBox body = new VBox(14, commentList, new VBox(7, commentInput, composer));
-        body.setPadding(new Insets(14, 18, 16, 18));
-
-        VBox card = new VBox(header, body);
-        card.getStyleClass().add("card-flush");
-        return card;
-    }
-
-    private VBox buildRatingCard() {
-        VBox header = new VBox(Styles.subtitle("Ratings"));
-        header.getStyleClass().add("card-header");
-
-        VBox body = new VBox(ratingSummary);
-        body.setPadding(new Insets(14, 18, 16, 18));
-
-        VBox card = new VBox(header, body);
-        card.getStyleClass().add("card-flush");
-        return card;
-    }
-
-    private VBox buildReviewsCard() {
-        VBox header = new VBox(3, Styles.subtitle("Reviews"), reviewStoreLabel);
-        header.getStyleClass().add("card-header");
-
-        VBox body = new VBox(12, reviewList, buildReviewComposer());
-        body.setPadding(new Insets(14, 18, 16, 18));
-
-        VBox card = new VBox(header, body);
-        card.getStyleClass().add("card-flush");
-        return card;
-    }
-
-    private Node buildReviewComposer() {
-        ComboBox<Integer> rating = new ComboBox<>();
-        rating.getItems().addAll(5, 4, 3, 2, 1);
-        rating.setValue(5);
-        rating.setPrefWidth(70);
-
-        TextField headline = new TextField();
-        headline.setPromptText("Headline (optional)");
-        HBox.setHgrow(headline, Priority.ALWAYS);
-
-        Button submit = new Button("Review");
-        submit.getStyleClass().addAll("btn-secondary", "btn-small");
-        submit.setOnAction(event -> submitReview(rating.getValue(), headline, submit));
-
-        VBox composer = new VBox(7,
-                Styles.label("Leave a review", "field-label"),
-                Styles.row(7, rating, headline),
-                Styles.row(7, Styles.spacer(), submit));
-        composer.setPadding(new Insets(10, 0, 0, 0));
-        return composer;
+    /** The "Review" button. */
+    @FXML
+    private void postReview() {
+        submitReview(ratingBox.getValue(), reviewHeadline, reviewButton);
     }
 
     // -----------------------------------------------------------------
@@ -283,12 +212,9 @@ public class PostDetailView implements View {
     }
 
     /**
-     * One comment, indented by its depth.
-     *
-     * <p>The thread arrives already ordered with parents before their replies,
-     * from the recursive CTE on the SQL side or the path sort on the Mongo
-     * side, so rendering is a flat loop rather than a tree walk. Indentation
-     * is capped so a deep chain does not push text off the right edge.
+     * Draws one comment, indented by its depth.
+     * The list already has each parent before its replies, so a simple loop is enough.
+     * The indent stops growing after {@code MAX_VISUAL_DEPTH} levels.
      */
     private Node renderComment(Comment comment) {
         Label author = Styles.label(comment.displayName(), "text-body");
@@ -328,6 +254,18 @@ public class PostDetailView implements View {
 
         HBox actions = Styles.row(4, reply);
 
+        // The author of a comment can edit or delete it; an admin can too.
+        boolean isOwnComment = comment.authorId() != null
+                && comment.authorId() == Session.currentUserId();
+        boolean canChange = isOwnComment || Session.canModerate();
+
+        if (canChange) {
+            Button edit = new Button("Edit");
+            edit.getStyleClass().addAll("btn-ghost", "btn-small");
+            edit.setOnAction(event -> openEditBox(comment, edit));
+            actions.getChildren().add(edit);
+        }
+
         if (Session.canModerate()) {
             Button toggle = new Button(
                     comment.status() == CommentStatus.VISIBLE ? "Hide" : "Restore");
@@ -337,17 +275,54 @@ public class PostDetailView implements View {
                             ? commentService.hide(comment.commentId())
                             : commentService.restore(comment.commentId()),
                     updated -> loadComments()));
+            actions.getChildren().add(toggle);
+        }
 
+        if (canChange) {
             Button delete = new Button("Delete");
             delete.getStyleClass().addAll("btn-ghost", "btn-small");
             delete.setOnAction(event -> confirmDeleteComment(comment));
-
-            actions.getChildren().addAll(toggle, delete);
+            actions.getChildren().add(delete);
         }
         return actions;
     }
 
-    /** Expands an inline composer under the comment being replied to. */
+    /** Opens a text box under the comment, filled with its current text. */
+    private void openEditBox(Comment comment, Button trigger) {
+        TextArea input = new TextArea(comment.body());
+        input.setWrapText(true);
+        input.setPrefRowCount(2);
+
+        Button save = new Button("Save");
+        save.getStyleClass().addAll("btn-primary", "btn-small");
+
+        Button cancel = new Button("Cancel");
+        cancel.getStyleClass().addAll("btn-ghost", "btn-small");
+
+        VBox editor = new VBox(7, input, Styles.row(7, Styles.spacer(), cancel, save));
+        editor.setPadding(new Insets(8, 0, 0, 0));
+
+        VBox container = (VBox) trigger.getParent().getParent();
+        container.getChildren().add(editor);
+        trigger.setDisable(true);
+        input.requestFocus();
+
+        cancel.setOnAction(event -> {
+            container.getChildren().remove(editor);
+            trigger.setDisable(false);
+        });
+        save.setOnAction(event -> {
+            save.setDisable(true);
+            Async.run(() -> commentService.editBody(comment.commentId(), input.getText()),
+                    updated -> loadComments(),
+                    error -> {
+                        save.setDisable(false);
+                        Dialogs.error("Could not save the comment", error);
+                    });
+        });
+    }
+
+    /** Opens a reply box under the comment being replied to. */
     private void openReplyBox(Comment parent, Button trigger) {
         TextArea input = new TextArea();
         input.setPromptText("Replying to " + parent.displayName() + "…");
@@ -377,8 +352,8 @@ public class PostDetailView implements View {
 
     private void submitComment(Comment parent, TextArea input, Button trigger) {
         if (!Session.isSignedIn()) {
-            Dialogs.error("No user selected",
-                    "Choose a user in the top right before commenting.");
+            Dialogs.error("Not signed in",
+                    "Sign in before commenting.");
             return;
         }
         String body = input.getText();
@@ -454,8 +429,7 @@ public class PostDetailView implements View {
                 box.getChildren().add(headline);
             }
             if (!review.criteria().isEmpty()) {
-                // Only the document store can supply these; the JDBC DAO
-                // returns an empty map, so the row simply does not appear.
+                // Only MongoDB stores criteria. The JDBC DAO returns an empty map, so this row is skipped.
                 String detail = review.criteria().entrySet().stream()
                         .map(e -> e.getKey() + " " + e.getValue())
                         .reduce((a, b) -> a + "  ·  " + b)
@@ -489,8 +463,7 @@ public class PostDetailView implements View {
 
         ratingSummary.getChildren().addAll(averageLabel, countLabel);
 
-        // Five fixed rows, including the ratings nobody gave: a distribution
-        // with gaps silently removed is misleading.
+        // Always show all five rows, even for ratings with no reviews.
         for (int stars = 5; stars >= 1; stars--) {
             long count = distribution.getOrDefault(stars, 0L);
             ratingSummary.getChildren().add(distributionRow(stars, count, total));
@@ -512,8 +485,8 @@ public class PostDetailView implements View {
 
     private void submitReview(Integer rating, TextField headline, Button trigger) {
         if (!Session.isSignedIn()) {
-            Dialogs.error("No user selected",
-                    "Choose a user in the top right before reviewing.");
+            Dialogs.error("Not signed in",
+                    "Sign in before reviewing.");
             return;
         }
         long reviewerId = Session.currentUserId();

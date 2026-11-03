@@ -1,13 +1,13 @@
-package org.example.bloggingplatformi.view;
+package org.example.bloggingplatformi.controller;
 
 import java.util.List;
+import java.util.function.Supplier;
 
-import javafx.geometry.Insets;
+import javafx.fxml.FXML;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
-import javafx.scene.control.ScrollPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
@@ -17,49 +17,35 @@ import org.example.bloggingplatformi.service.CommentService;
 import org.example.bloggingplatformi.ui.AppShell;
 import org.example.bloggingplatformi.ui.Async;
 import org.example.bloggingplatformi.ui.Dialogs;
+import org.example.bloggingplatformi.ui.Fxml;
 import org.example.bloggingplatformi.ui.Icons;
 import org.example.bloggingplatformi.ui.Session;
 import org.example.bloggingplatformi.ui.Styles;
 import org.example.bloggingplatformi.ui.View;
 
 /**
- * The moderation queue: every comment that is flagged or hidden.
- *
- * <p>Backed by a partial index in both stores — {@code idx_comments_moderation}
- * in PostgreSQL and the matching partial index in MongoDB — because the rows
- * this screen wants are a small minority of a large table, which is exactly
- * when a partial index earns its keep.
+ * Controller for moderation.fxml (admin only): lists every flagged or hidden comment
+ * so the admin can restore, hide or delete it.
+ * The query uses a partial index in both PostgreSQL and MongoDB, since only a few comments match.
  */
-public class ModerationView implements View {
+public class ModerationController implements View {
 
     private final AppShell shell;
     private final CommentService commentService = new CommentService();
+    private final Node root;
 
-    private final VBox root = new VBox(16);
-    private final VBox queue = new VBox(10);
-    private final Label countLabel = Styles.label("", "text-small");
+    // Filled by FXMLLoader from the fx:id values in moderation.fxml.
+    @FXML private Label countLabel;
+    @FXML private VBox queue;
 
-    public ModerationView(AppShell shell) {
+    public ModerationController(AppShell shell) {
         this.shell = shell;
-
-        VBox header = new VBox(3, Styles.subtitle("Flagged and hidden comments"), countLabel);
-        header.getStyleClass().add("card-header");
-
-        VBox body = new VBox(queue);
-        body.setPadding(new Insets(14, 18, 16, 18));
-
-        VBox card = new VBox(header, body);
-        card.getStyleClass().add("card-flush");
-
-        root.getChildren().add(card);
-        root.setPadding(new Insets(24, 26, 28, 26));
+        this.root = Fxml.load("moderation.fxml", this);
     }
 
     @Override
     public Node getRoot() {
-        ScrollPane scroller = new ScrollPane(root);
-        scroller.setFitToWidth(true);
-        return scroller;
+        return root;
     }
 
     @Override
@@ -92,7 +78,7 @@ public class ModerationView implements View {
             countLabel.setText("");
             queue.getChildren().setAll(message(
                     "Admins only",
-                    "Switch to an account with the ADMIN role to use the moderation queue."));
+                    "Sign in with an ADMIN account to use the moderation queue."));
             return;
         }
 
@@ -136,7 +122,7 @@ public class ModerationView implements View {
 
         Button open = new Button("Open post");
         open.getStyleClass().addAll("btn-ghost", "btn-small");
-        open.setOnAction(event -> shell.push(new PostDetailView(shell, comment.postId())));
+        open.setOnAction(event -> shell.push(new PostDetailController(shell, comment.postId())));
 
         Button restore = new Button("Restore");
         restore.getStyleClass().addAll("btn-secondary", "btn-small");
@@ -158,7 +144,7 @@ public class ModerationView implements View {
         return box;
     }
 
-    private void act(java.util.function.Supplier<?> operation) {
+    private void act(Supplier<?> operation) {
         Async.run(operation::get, result -> load());
     }
 

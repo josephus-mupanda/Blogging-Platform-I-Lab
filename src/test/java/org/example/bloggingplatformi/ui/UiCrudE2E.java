@@ -10,6 +10,7 @@ import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.DialogPane;
 import javafx.scene.control.Label;
+import javafx.scene.control.PasswordField;
 import javafx.scene.control.TableRow;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextArea;
@@ -53,19 +54,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
- * End-to-end CRUD through the real JavaFX application, against the live
- * PostgreSQL and MongoDB servers.
- *
- * <p>Nothing here calls a service to <em>do</em> anything. Every create,
- * update and delete is performed by typing into the application's own
- * controls and pressing its own buttons, including the confirmation dialogs.
- * Services are used only afterwards, to read the databases and check that
- * what the screen claimed happened really did.
- *
- * <p>Opens a real window, so it is not part of {@code mvn test}. Run it with
- * <pre>mvn test -Dtest=UiCrudE2E -Dsurefire.failIfNoSpecifiedTests=false</pre>
- * Screenshots of each screen, with the seeded data, are written to
- * {@code docs/screenshots/}.
+ * End-to-end test: creates, edits and deletes data by clicking through the real
+ * JavaFX app, with PostgreSQL and MongoDB running. Services are only used to
+ * check the database afterwards. It opens a window, so it is not part of mvn test.
+ * Run: mvn test -Dtest=UiCrudE2E -Dsurefire.failIfNoSpecifiedTests=false
+ * Screenshots are saved to docs/screenshots/.
  */
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
@@ -73,11 +66,12 @@ class UiCrudE2E {
 
     private static final Path SHOTS = Path.of(System.getProperty("e2e.screenshots", "docs/screenshots"));
 
-    /** Unique per run, so a failed earlier run can never satisfy an assertion. */
+    /** Different on every run, so data left by an old run cannot make a check pass. */
     private final String token = "e2e" + Long.toString(System.currentTimeMillis(), 36);
     private final String title = "UI end-to-end check " + token;
     private final String tagName = "e2e-tag-" + token;
     private final String newTagName = "e2e-new-" + token;
+    private final String secondTagName = "e2e-second-" + token;
 
     private final PostService posts = new PostService();
     private final CommentService comments = new CommentService();
@@ -103,25 +97,28 @@ class UiCrudE2E {
         scene = fx(stage::getScene);
         settle();
 
-        // The shell picks the first account that can moderate; the whole run
-        // acts as that admin.
+        // Sign in through the login screen as the admin, and use that account for the whole test.
+        type(field(root(), TextField.class, "Username"), "admin");
+        type(field(root(), PasswordField.class, "Password"), "111111");
+        click(button(root(), "Sign in"));
         waitFor("a signed-in user", Session::isSignedIn);
+        settle();
         assertEquals(Role.ADMIN, Session.currentRole());
     }
 
     @AfterAll
     void close() {
-        // Only reached for leftovers if a step failed part-way.
+        // Cleans up only if a test failed before deleting its data.
         if (postId != null) {
             try {
                 comments.deleteForPost(postId);
                 reviews.deleteForPost(postId);
                 posts.delete(postId);
             } catch (RuntimeException ignored) {
-                // already deleted by the test, which is the normal case
+                // Already deleted by the test. This is the normal case.
             }
         }
-        for (String name : List.of(tagName, newTagName)) {
+        for (String name : List.of(tagName, newTagName, secondTagName)) {
             tags.findByName(name).ifPresent(tag -> tags.delete(tag.tagId()));
         }
         if (stage != null) {
@@ -190,7 +187,7 @@ class UiCrudE2E {
         @SuppressWarnings("unchecked")
         ComboBox<String> tagInput = one(root(), ComboBox.class, ComboBox::isEditable, "tag input");
         typeAndEnter(fx(tagInput::getEditor), tagName);
-        typeAndEnter(fx(tagInput::getEditor), "java");
+        typeAndEnter(fx(tagInput::getEditor), secondTagName);
         shot("03-post-editor.png");
 
         click(button(root(), "Save post"));
@@ -201,7 +198,7 @@ class UiCrudE2E {
         Post post = posts.require(postId);
         assertEquals(PostStatus.PUBLISHED, post.status());
         assertNotNull(post.publishedAt(), "publishing stamps a date");
-        assertEquals(List.of("java", tagName).stream().sorted().toList(),
+        assertEquals(List.of(secondTagName, tagName).stream().sorted().toList(),
                 posts.tagsOf(postId).stream().map(Tag::name).sorted().toList());
         assertEquals(Session.currentUserId(), post.authorId());
     }
@@ -297,9 +294,8 @@ class UiCrudE2E {
         go("Posts");
         search(token);
 
-        // The list's engagement figures must come from the same store as the
-        // detail screen's: one visible comment, one visible reply, one 4-star
-        // review. They once came from PostgreSQL regardless of the store.
+        // The list must show the same counts as the detail screen:
+        // one comment, one reply and one 4-star review.
         PostSummary listed = fx(rowFor(postId)::getItem);
         assertEquals(comments.countFor(postId, false), listed.commentCount());
         assertEquals(2, listed.commentCount());
@@ -330,13 +326,22 @@ class UiCrudE2E {
 
     @Test
     @Order(9)
-    @DisplayName("delete: removing a comment takes its replies with it")
-    void deleteComment() {
+    @DisplayName("update then delete: edit a comment, then removing it takes its replies with it")
+    void editAndDeleteComment() {
         search(token);
         click(buttonWithTooltip(rowFor(postId), "Open"));
         settle();
 
-        Node top = commentBox("Top-level comment " + token);
+        String editedBody = "Top-level comment " + token + " (edited)";
+        Node original = commentBox("Top-level comment " + token);
+        click(button(original, "Edit"));
+        type(one(original, TextArea.class, area -> true, "comment edit box"), editedBody);
+        click(button(original, "Save"));
+        settle();
+        assertEquals(1, comments.threadFor(postId, true).stream()
+                .filter(c -> editedBody.equals(c.body())).count(), "the edited text was saved");
+
+        Node top = commentBox(editedBody);
         clickLater(button(top, "Delete"));
         answerDialog(awaitDialog(), "Delete");
         settle();
@@ -378,9 +383,12 @@ class UiCrudE2E {
 
         @SuppressWarnings("unchecked")
         TableView<User> table = one(root(), TableView.class, t -> true, "accounts table");
-        User target = fx(() -> table.getItems().stream()
+        Optional<User> candidate = fx(() -> table.getItems().stream()
                 .filter(u -> u.role() != Role.ADMIN && u.active())
-                .findFirst().orElseThrow());
+                .findFirst());
+        // The database starts with only the admin, so this needs a blogger or reader to sign up first.
+        assumeTrue(candidate.isPresent(), "skipped: no blogger or reader account yet");
+        User target = candidate.get();
         fxRun(() -> table.scrollTo(target));
         settle();
 
@@ -415,10 +423,12 @@ class UiCrudE2E {
 
     @Test
     @Order(13)
-    @DisplayName("screenshot: a seeded post with a threaded discussion")
+    @DisplayName("screenshot: a post with a threaded discussion")
     void seededDetailScreenshot() {
         search("Threaded Comments");
         TableView<PostSummary> table = table();
+        // The database starts empty, so this only runs once such a post has been entered.
+        assumeTrue(fx(() -> !table.getItems().isEmpty()), "skipped: no post about threaded comments yet");
         PostSummary seeded = fx(() -> table.getItems().get(0));
         click(buttonWithTooltip(rowFor(seeded.postId()), "Open"));
         settle();
@@ -440,7 +450,7 @@ class UiCrudE2E {
     private void search(String text) {
         TextField box = field(root(), TextField.class, "Search titles and content");
         type(box, text);
-        pause(400); // PostListView debounces keystrokes for 280ms
+        pause(400); // the search waits 280 ms after the last key press
         settle();
     }
 
@@ -463,7 +473,7 @@ class UiCrudE2E {
                 "table row for user " + userId);
     }
 
-    /** The card around a rendered comment, found by its text. */
+    /** Finds the box that holds a comment, using the comment text. */
     private Node commentBox(String body) {
         Label label = one(root(), Label.class, l -> body.equals(l.getText()), "comment '" + body + "'");
         return fx(() -> {

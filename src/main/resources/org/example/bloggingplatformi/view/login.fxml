@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+  Sign in / sign up screen.
+  Two cards are stacked on top of each other; the controller shows one and hides the other.
+  Controller: org.example.bloggingplatformi.controller.LoginController
+-->
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.PasswordField?>
+<?import javafx.scene.control.RadioButton?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.control.ToggleGroup?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.StackPane?>
+<?import javafx.scene.layout.VBox?>
+
+<StackPane xmlns="http://javafx.com/javafx" xmlns:fx="http://javafx.com/fxml"
+           fx:controller="org.example.bloggingplatformi.controller.LoginController"
+           styleClass="content-area">
+    <padding><Insets top="24" right="24" bottom="24" left="24"/></padding>
+
+    <!-- ===================== Sign in card ===================== -->
+    <VBox fx:id="signInCard" spacing="14" styleClass="card" maxWidth="380" maxHeight="-Infinity">
+        <padding><Insets top="28" right="28" bottom="28" left="28"/></padding>
+
+        <HBox spacing="10" alignment="CENTER_LEFT">
+            <StackPane styleClass="sidebar-brand-mark"><Label text="B"/></StackPane>
+            <Label text="Blogfold" styleClass="text-subtitle"/>
+        </HBox>
+        <Label text="Sign in" styleClass="text-title"/>
+        <Label text="Welcome back to Blogfold." styleClass="text-small"/>
+
+        <VBox spacing="5">
+            <Label text="Username" styleClass="field-label"/>
+            <TextField fx:id="loginUsername" promptText="Username"/>
+        </VBox>
+        <VBox spacing="5">
+            <Label text="Password" styleClass="field-label"/>
+            <PasswordField fx:id="loginPassword" promptText="Password"/>
+        </VBox>
+
+        <!-- Hidden until there is something to say. -->
+        <Label fx:id="successLabel" styleClass="form-success-text" wrapText="true"
+               visible="false" managed="false"/>
+        <Label fx:id="signInError" styleClass="field-error-text" wrapText="true"
+               visible="false" managed="false"/>
+
+        <Button fx:id="signInButton" text="Sign in" styleClass="btn-primary"
+                maxWidth="Infinity" defaultButton="true" onAction="#signIn"/>
+        <Button text="No account yet? Sign up" styleClass="btn-ghost, btn-small"
+                onAction="#showSignUp"/>
+    </VBox>
+
+    <!-- ===================== Sign up card ===================== -->
+    <VBox fx:id="signUpCard" spacing="14" styleClass="card" maxWidth="380" maxHeight="-Infinity"
+          visible="false" managed="false">
+        <padding><Insets top="28" right="28" bottom="28" left="28"/></padding>
+
+        <HBox spacing="10" alignment="CENTER_LEFT">
+            <StackPane styleClass="sidebar-brand-mark"><Label text="B"/></StackPane>
+            <Label text="Blogfold" styleClass="text-subtitle"/>
+        </HBox>
+        <Label text="Create an account" styleClass="text-title"/>
+        <Label text="Join Blogfold as a blogger or a reader." styleClass="text-small"/>
+
+        <VBox spacing="5">
+            <Label text="Display name" styleClass="field-label"/>
+            <TextField fx:id="signupName" promptText="Display name"/>
+        </VBox>
+        <VBox spacing="5">
+            <Label text="Username" styleClass="field-label"/>
+            <TextField fx:id="signupUsername" promptText="Choose a username"/>
+        </VBox>
+        <VBox spacing="5">
+            <Label text="Email" styleClass="field-label"/>
+            <TextField fx:id="signupEmail" promptText="Email"/>
+        </VBox>
+        <VBox spacing="5">
+            <Label text="Password" styleClass="field-label"/>
+            <PasswordField fx:id="signupPassword" promptText="At least 6 characters"/>
+        </VBox>
+
+        <!-- The two radio buttons share one ToggleGroup, so only one can be chosen. -->
+        <fx:define><ToggleGroup fx:id="roleGroup"/></fx:define>
+        <VBox spacing="6">
+            <Label text="I am a" styleClass="field-label"/>
+            <RadioButton fx:id="bloggerChoice" text="Blogger (writes posts)" toggleGroup="$roleGroup"/>
+            <RadioButton fx:id="readerChoice" text="Reader (comments and reviews)"
+                         toggleGroup="$roleGroup" selected="true"/>
+        </VBox>
+
+        <Label fx:id="signUpError" styleClass="field-error-text" wrapText="true"
+               visible="false" managed="false"/>
+
+        <Button fx:id="signUpButton" text="Create account" styleClass="btn-primary"
+                maxWidth="Infinity" onAction="#signUp"/>
+        <Button text="Already have an account? Sign in" styleClass="btn-ghost, btn-small"
+                onAction="#showSignIn"/>
+    </VBox>
+</StackPane>

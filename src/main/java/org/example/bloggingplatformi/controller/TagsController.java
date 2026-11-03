@@ -1,20 +1,16 @@
-package org.example.bloggingplatformi.view;
+package org.example.bloggingplatformi.controller;
 
 import java.util.List;
 import java.util.Map;
 
-import javafx.geometry.Insets;
+import javafx.fxml.FXML;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
-import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.HBox;
-import javafx.scene.layout.Priority;
-import javafx.scene.layout.Region;
-import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 
 import org.example.bloggingplatformi.model.Tag;
@@ -22,40 +18,39 @@ import org.example.bloggingplatformi.service.TagService;
 import org.example.bloggingplatformi.ui.AppShell;
 import org.example.bloggingplatformi.ui.Async;
 import org.example.bloggingplatformi.ui.Dialogs;
+import org.example.bloggingplatformi.ui.Fxml;
 import org.example.bloggingplatformi.ui.Icons;
 import org.example.bloggingplatformi.ui.Styles;
 import org.example.bloggingplatformi.ui.View;
 
 /**
- * The tag vocabulary: everything defined, how heavily each is used, and a way
- * to add or retire one.
- *
- * <p>Deleting a tag removes its {@code post_tags} rows by cascade but leaves
- * every post intact, which the confirmation says explicitly — "delete tag" is
- * ambiguous enough to be worth spelling out.
+ * Controller for tags.fxml (admin only): shows all tags and how often each is used,
+ * and lets the admin add or delete a tag.
+ * Deleting a tag removes it from posts but does not delete the posts.
  */
-public class TagsView implements View {
+public class TagsController implements View {
 
-    private final AppShell shell;
     private final TagService tagService = new TagService();
+    private final Node root;
 
-    private final VBox root = new VBox(16);
-    private final FlowPane cloud = new FlowPane(9, 9);
-    private final VBox usageList = new VBox(9);
-    private final TextField newTagField = new TextField();
+    // Filled by FXMLLoader from the fx:id values in tags.fxml.
+    @FXML private TextField newTagField;
+    @FXML private Button addButton;
+    @FXML private FlowPane cloud;
+    @FXML private VBox usageList;
 
-    public TagsView(AppShell shell) {
-        this.shell = shell;
+    public TagsController() {
+        this.root = Fxml.load("tags.fxml", this);
+    }
 
-        root.getChildren().addAll(buildCreateCard(), buildPanels());
-        root.setPadding(new Insets(24, 26, 28, 26));
+    @FXML
+    private void initialize() {
+        addButton.setGraphic(Icons.of(Icons.PLUS, 15));
     }
 
     @Override
     public Node getRoot() {
-        ScrollPane scroller = new ScrollPane(root);
-        scroller.setFitToWidth(true);
-        return scroller;
+        return root;
     }
 
     @Override
@@ -84,54 +79,6 @@ public class TagsView implements View {
         loadUsage();
     }
 
-    private Node buildCreateCard() {
-        newTagField.setPromptText("New tag name");
-        newTagField.setPrefWidth(260);
-        newTagField.setOnAction(event -> createTag());
-
-        Button add = new Button("Add tag");
-        add.setGraphic(Icons.of(Icons.PLUS, 15));
-        add.getStyleClass().add("btn-primary");
-        add.setOnAction(event -> createTag());
-
-        Label hint = Styles.label(
-                "Names are stored lower-case, so “Java” and “java” cannot both exist.",
-                "text-caption");
-
-        // Wraps rather than pushing the hint text past the window edge.
-        javafx.scene.layout.FlowPane row = new javafx.scene.layout.FlowPane(10, 8,
-                newTagField, add, hint);
-        row.setAlignment(Pos.CENTER_LEFT);
-        row.getStyleClass().add("card");
-        row.setPadding(new Insets(13, 16, 13, 16));
-        return row;
-    }
-
-    private Node buildPanels() {
-        VBox cloudPanel = panel("All tags", new VBox(cloud));
-        VBox usagePanel = panel("Usage", usageList);
-
-        HBox columns = new HBox(16, cloudPanel, usagePanel);
-        HBox.setHgrow(cloudPanel, Priority.ALWAYS);
-        cloudPanel.setMinWidth(0);
-        usagePanel.setMinWidth(250);
-        usagePanel.setPrefWidth(320);
-        usagePanel.setMaxWidth(340);
-        return columns;
-    }
-
-    private VBox panel(String heading, VBox body) {
-        VBox header = new VBox(Styles.subtitle(heading));
-        header.getStyleClass().add("card-header");
-
-        VBox content = new VBox(body);
-        content.setPadding(new Insets(14, 18, 16, 18));
-
-        VBox panel = new VBox(header, content);
-        panel.getStyleClass().add("card-flush");
-        return panel;
-    }
-
     private void loadCloud() {
         cloud.getChildren().setAll(cloudMessage("Loading…"));
 
@@ -149,12 +96,8 @@ public class TagsView implements View {
     }
 
     /**
-     * A message placed inside the tag cloud.
-     *
-     * <p>{@code cloud} is a {@link FlowPane}, which hands each child its
-     * preferred width rather than the pane's. A wrapping label therefore
-     * reports one long line and is clipped at the panel edge, so the wrap
-     * width is bound to the pane explicitly.
+     * A message shown inside the tag cloud.
+     * Its width is bound to the cloud, otherwise the FlowPane would not wrap the text.
      */
     private Node cloudMessage(String text) {
         Label label = Styles.message(text);
@@ -208,6 +151,7 @@ public class TagsView implements View {
         return Styles.row(10, nameLabel, track, countLabel);
     }
 
+    @FXML
     private void createTag() {
         String name = newTagField.getText();
         if (name == null || name.isBlank()) {

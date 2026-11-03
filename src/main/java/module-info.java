@@ -1,12 +1,12 @@
 module org.example.bloggingplatformi {
     requires javafx.controls;
+    requires javafx.fxml;
 
-    // Relational access. java.sql brings DriverManager/DataSource; the
-    // PostgreSQL driver is loaded as a service, not referenced directly.
+    // PostgreSQL access. The driver is found at runtime, so it is not listed here.
     requires java.sql;
     requires com.zaxxer.hikari;
 
-    // Document access.
+    // MongoDB access.
     requires org.mongodb.driver.sync.client;
     requires org.mongodb.driver.core;
     requires org.mongodb.bson;
@@ -17,5 +17,9 @@ module org.example.bloggingplatformi {
     exports org.example.bloggingplatformi.config;
     exports org.example.bloggingplatformi.model;
     exports org.example.bloggingplatformi.ui;
-    exports org.example.bloggingplatformi.view;
+    exports org.example.bloggingplatformi.controller;
+
+    // FXMLLoader fills the @FXML fields of the controllers, so it needs access to them.
+    opens org.example.bloggingplatformi.controller to javafx.fxml;
+    opens org.example.bloggingplatformi.ui to javafx.fxml;
 }
