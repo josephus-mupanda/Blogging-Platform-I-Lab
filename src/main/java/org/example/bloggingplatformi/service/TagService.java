@@ -43,11 +43,6 @@ public class TagService {
         return tagDao.findByPostId(postId);
     }
 
-    /** Returns tags that start with the typed text, for the tag picker. */
-    public List<Tag> suggest(String prefix) {
-        return tagDao.searchByPrefix(prefix, AUTOCOMPLETE_LIMIT);
-    }
-
     /** Maps each tag name to its number of posts, most used first. */
     public Map<String, Long> usageCounts(int limit) {
         return tagDao.usageCounts(limit);

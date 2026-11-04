@@ -65,20 +65,6 @@ public class JdbcReviewDao implements ReviewDao {
     }
 
     @Override
-    public List<Review> findByReviewer(long reviewerId, int limit) {
-        return Database.withConnection(connection -> {
-            try (PreparedStatement ps = connection.prepareStatement(
-                    SELECT_BASE + " WHERE r.reviewer_id = ? ORDER BY r.created_at DESC LIMIT ?")) {
-                ps.setLong(1, reviewerId);
-                ps.setInt(2, Math.max(1, limit));
-                return mapAll(ps);
-            } catch (SQLException e) {
-                throw SqlSupport.translate(e, "Review");
-            }
-        });
-    }
-
-    @Override
     public Optional<Review> findByPostAndReviewer(long postId, long reviewerId) {
         return Database.withConnection(connection -> {
             try (PreparedStatement ps = connection.prepareStatement(

@@ -39,14 +39,6 @@ public class ReviewService {
         return reviewDao.findByPostId(postId);
     }
 
-    public List<Review> findByReviewer(long reviewerId, int limit) {
-        return reviewDao.findByReviewer(reviewerId, limit);
-    }
-
-    public Optional<Review> findByPostAndReviewer(long postId, long reviewerId) {
-        return reviewDao.findByPostAndReviewer(postId, reviewerId);
-    }
-
     /** Empty when the post has no reviews, so the UI can show a dash instead of zero. */
     public Optional<Double> averageRating(long postId) {
         return reviewDao.averageRating(postId);
@@ -92,30 +84,6 @@ public class ReviewService {
         errors.throwIfInvalid();
 
         Review updated = existing.withRating(rating, trimOrNull(headline), trimOrNull(body));
-        if (!reviewDao.update(updated)) {
-            throw new EntityNotFoundException("Review", reviewId);
-        }
-        return updated;
-    }
-
-    /**
-     * Replaces a review's optional sub-scores. Only MongoDB stores them.
-     * The PostgreSQL table has no column for them, so they come back empty.
-     */
-    public Review setCriteria(String reviewId, Map<String, Integer> criteria) {
-        Review existing = reviewDao.findById(reviewId)
-                .orElseThrow(() -> new EntityNotFoundException("Review", reviewId));
-
-        if (criteria != null) {
-            ValidationException.Collector errors = new ValidationException.Collector();
-            criteria.forEach((key, value) -> errors.rejectIf(
-                    value == null || value < Review.MIN_RATING || value > Review.MAX_RATING,
-                    "criteria." + key,
-                    "Scores must be between " + Review.MIN_RATING + " and " + Review.MAX_RATING + "."));
-            errors.throwIfInvalid();
-        }
-
-        Review updated = existing.withCriteria(criteria);
         if (!reviewDao.update(updated)) {
             throw new EntityNotFoundException("Review", reviewId);
         }

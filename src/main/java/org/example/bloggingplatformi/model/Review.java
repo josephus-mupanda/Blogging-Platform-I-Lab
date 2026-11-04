@@ -2,7 +2,6 @@ package org.example.bloggingplatformi.model;
 
 import java.time.OffsetDateTime;
 import java.util.Map;
-import java.util.Objects;
 
 /**
  * A review: a rating from 1 to 5, with an optional headline and text.
@@ -67,11 +66,5 @@ public record Review(
     /** The rating as stars, for example 3 becomes ★★★☆☆. */
     public String stars() {
         return "★".repeat(rating) + "☆".repeat(MAX_RATING - rating);
-    }
-
-    /** Throws if the reviewer name is missing, because the name is stored on the review. */
-    public static Review requireNamed(Review review) {
-        Objects.requireNonNull(review.reviewerName, "reviewerName");
-        return review;
     }
 }

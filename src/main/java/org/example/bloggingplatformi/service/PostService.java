@@ -60,10 +60,6 @@ public class PostService {
         return postDao.findById(postId);
     }
 
-    public Optional<Post> findBySlug(String slug) {
-        return postDao.findBySlug(slug);
-    }
-
     public Post require(long postId) {
         return postDao.findById(postId)
                 .orElseThrow(() -> new EntityNotFoundException("Post", postId));
@@ -73,10 +69,6 @@ public class PostService {
         Page<PostSummary> page = postDao.search(filter == null ? PostFilter.all() : filter);
         List<PostSummary> decorated = withEngagement(page.content());
         return new Page<>(decorated, page.pageNumber(), page.pageSize(), page.totalElements());
-    }
-
-    public List<PostSummary> findByAuthor(long authorId, int limit, int offset) {
-        return withEngagement(postDao.findByAuthor(authorId, limit, offset));
     }
 
     /**

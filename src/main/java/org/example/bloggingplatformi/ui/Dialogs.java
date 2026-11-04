@@ -33,10 +33,6 @@ public final class Dialogs {
         Async.onFxThread(() -> build(Alert.AlertType.ERROR, title, message).showAndWait());
     }
 
-    public static void info(String title, String message) {
-        Async.onFxThread(() -> build(Alert.AlertType.INFORMATION, title, message).showAndWait());
-    }
-
     /**
      * Asks the user to confirm an action that cannot be undone.
      * The confirm button shows the action name (for example "Delete post") instead of "OK".

@@ -126,14 +126,6 @@ public class MongoCommentDao implements CommentDao {
     }
 
     @Override
-    public List<Comment> findByAuthor(long authorId, int limit) {
-        return run(() -> collect(comments()
-                .find(Filters.eq(F_AUTHOR_ID, authorId))
-                .sort(Sorts.descending(F_CREATED_AT))
-                .limit(Math.max(1, limit))));
-    }
-
-    @Override
     public List<Comment> search(String keyword, int limit) {
         if (keyword == null || keyword.isBlank()) {
             return List.of();
@@ -421,5 +413,4 @@ public class MongoCommentDao implements CommentDao {
             throw new DataAccessException("MongoDB comment operation failed: " + e.getMessage(), e);
         }
     }
-
 }

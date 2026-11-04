@@ -87,30 +87,6 @@ public class JdbcTagDao implements TagDao {
     }
 
     @Override
-    public List<Tag> searchByPrefix(String prefix, int limit) {
-        if (prefix == null || prefix.isBlank()) {
-            return List.of();
-        }
-        // "prefix%" can use the idx_tags_name_lower index.
-        // escapeLike stops a % or _ typed by the user from acting as a wildcard.
-        String sql = "SELECT " + COLUMNS + """
-                 FROM tags
-                 WHERE LOWER(name) LIKE ? ESCAPE '\\'
-                 ORDER BY name
-                 LIMIT ?
-                """;
-        return Database.withConnection(connection -> {
-            try (PreparedStatement ps = connection.prepareStatement(sql)) {
-                ps.setString(1, escapeLike(prefix.strip().toLowerCase(Locale.ROOT)) + "%");
-                ps.setInt(2, Math.max(1, limit));
-                return mapAll(ps);
-            } catch (SQLException e) {
-                throw SqlSupport.translate(e, "Tag");
-            }
-        });
-    }
-
-    @Override
     public Map<String, Long> usageCounts(int limit) {
         String sql = """
                 SELECT t.name, COUNT(pt.post_id) AS post_count

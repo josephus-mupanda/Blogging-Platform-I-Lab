@@ -190,12 +190,6 @@ public final class AppShell {
         bannerSlot.setManaged(true);
     }
 
-    public void clearBanner() {
-        bannerSlot.getChildren().clear();
-        bannerSlot.setVisible(false);
-        bannerSlot.setManaged(false);
-    }
-
     // -----------------------------------------------------------------
     // Navigation
     // -----------------------------------------------------------------

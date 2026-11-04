@@ -1,8 +1,6 @@
 package org.example.bloggingplatformi.dao;
 
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -310,11 +308,6 @@ class CachedPostDaoTest {
         public Page<PostSummary> search(PostFilter filter) {
             searchCalls.incrementAndGet();
             return Page.empty(filter.pageNumber(), filter.pageSize());
-        }
-
-        @Override
-        public List<PostSummary> findByAuthor(long authorId, int limit, int offset) {
-            return new ArrayList<>();
         }
 
         @Override

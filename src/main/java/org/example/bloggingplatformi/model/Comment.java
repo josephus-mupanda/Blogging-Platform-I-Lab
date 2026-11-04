@@ -81,11 +81,6 @@ public record Comment(
                 body, status, reactions, createdAt, updatedAt);
     }
 
-    public Comment withBody(String newBody) {
-        return new Comment(commentId, postId, authorId, authorName, parentId, path, depth,
-                newBody, status, reactions, createdAt, updatedAt);
-    }
-
     public Comment withStatus(CommentStatus newStatus) {
         return new Comment(commentId, postId, authorId, authorName, parentId, path, depth,
                 body, newStatus, reactions, createdAt, updatedAt);

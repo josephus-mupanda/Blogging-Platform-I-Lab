@@ -36,8 +36,6 @@ public interface CommentDao {
      */
     List<Comment> findSubtree(String rootCommentId);
 
-    List<Comment> findByAuthor(long authorId, int limit);
-
     /** Searches comment bodies for a keyword, ignoring case. */
     List<Comment> search(String keyword, int limit);
 

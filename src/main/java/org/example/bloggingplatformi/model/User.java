@@ -42,11 +42,6 @@ public record User(
                 active, createdAt, updatedAt);
     }
 
-    public User withProfile(String newDisplayName, String newBio) {
-        return new User(userId, username, email, passwordHash, newDisplayName, newBio, role,
-                active, createdAt, updatedAt);
-    }
-
     public User withActive(boolean newActive) {
         return new User(userId, username, email, passwordHash, displayName, bio, role,
                 newActive, createdAt, updatedAt);

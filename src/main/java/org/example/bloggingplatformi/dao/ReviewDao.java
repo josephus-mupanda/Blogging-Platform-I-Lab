@@ -23,8 +23,6 @@ public interface ReviewDao {
 
     List<Review> findByPostId(long postId);
 
-    List<Review> findByReviewer(long reviewerId, int limit);
-
     /** The review this user left on this post, if there is one. */
     Optional<Review> findByPostAndReviewer(long postId, long reviewerId);
 

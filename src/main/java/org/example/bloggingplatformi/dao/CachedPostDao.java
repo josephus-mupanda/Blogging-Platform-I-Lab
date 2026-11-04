@@ -1,6 +1,5 @@
 package org.example.bloggingplatformi.dao;
 
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -67,11 +66,6 @@ public class CachedPostDao implements PostDao {
     @Override
     public Page<PostSummary> search(PostFilter filter) {
         return delegate.search(filter);
-    }
-
-    @Override
-    public List<PostSummary> findByAuthor(long authorId, int limit, int offset) {
-        return delegate.findByAuthor(authorId, limit, offset);
     }
 
     @Override
@@ -160,10 +154,5 @@ public class CachedPostDao implements PostDao {
 
     public int slugIndexSize() {
         return slugIndex.size();
-    }
-
-    /** The real DAO underneath, so benchmarks can time it without the cache. */
-    public PostDao delegate() {
-        return delegate;
     }
 }

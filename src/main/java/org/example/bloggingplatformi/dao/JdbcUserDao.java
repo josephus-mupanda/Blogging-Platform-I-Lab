@@ -45,12 +45,6 @@ public class JdbcUserDao implements UserDao {
         return findOneByString(sql, username);
     }
 
-    @Override
-    public Optional<User> findByEmail(String email) {
-        String sql = "SELECT " + COLUMNS + " FROM users WHERE LOWER(email) = LOWER(?)";
-        return findOneByString(sql, email);
-    }
-
     private Optional<User> findOneByString(String sql, String value) {
         if (value == null || value.isBlank()) {
             return Optional.empty();

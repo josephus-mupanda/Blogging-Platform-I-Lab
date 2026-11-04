@@ -36,11 +36,6 @@ final class SqlSupport {
         return rs.wasNull() ? null : value;
     }
 
-    static Integer getNullableInt(ResultSet rs, String column) throws SQLException {
-        int value = rs.getInt(column);
-        return rs.wasNull() ? null : value;
-    }
-
     /**
      * Reads a TIMESTAMPTZ column as OffsetDateTime.
      * java.sql.Timestamp has no time zone, so the offset would be lost.
@@ -55,14 +50,6 @@ final class SqlSupport {
             ps.setNull(index, java.sql.Types.BIGINT);
         } else {
             ps.setLong(index, value);
-        }
-    }
-
-    static void setNullableInt(PreparedStatement ps, int index, Integer value) throws SQLException {
-        if (value == null) {
-            ps.setNull(index, java.sql.Types.INTEGER);
-        } else {
-            ps.setInt(index, value);
         }
     }
 

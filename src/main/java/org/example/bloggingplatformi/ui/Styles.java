@@ -6,7 +6,6 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 
-import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.Parent;
@@ -86,10 +85,6 @@ public final class Styles {
         return label(text, "text-subtitle");
     }
 
-    public static Label muted(String text) {
-        return label(text, "text-muted");
-    }
-
     /**
      * A message shown inside a panel, such as an empty state or an error.
      * The text wraps so a long message does not make the panel too wide.
@@ -102,20 +97,10 @@ public final class Styles {
         return label;
     }
 
-    public static Label eyebrow(String text) {
-        return label(text.toUpperCase(Locale.ENGLISH), "text-eyebrow");
-    }
-
     /** A horizontal spacer that pushes whatever follows it to the right. */
     public static Region spacer() {
         Region region = new Region();
         HBox.setHgrow(region, Priority.ALWAYS);
-        return region;
-    }
-
-    public static Region verticalSpacer() {
-        Region region = new Region();
-        VBox.setVgrow(region, Priority.ALWAYS);
         return region;
     }
 
@@ -157,12 +142,6 @@ public final class Styles {
 
     public static VBox column(double spacing, Node... children) {
         return new VBox(spacing, children);
-    }
-
-    public static VBox card(Node... children) {
-        VBox box = new VBox(12, children);
-        box.getStyleClass().add("card");
-        return box;
     }
 
     /** A circle with the user's initials, used instead of a profile picture. */
@@ -264,9 +243,5 @@ public final class Styles {
     /** Formats a number with thousands separators, for example 12,847. */
     public static String number(long value) {
         return String.format(Locale.ENGLISH, "%,d", value);
-    }
-
-    public static Insets insets(double top, double right, double bottom, double left) {
-        return new Insets(top, right, bottom, left);
     }
 }

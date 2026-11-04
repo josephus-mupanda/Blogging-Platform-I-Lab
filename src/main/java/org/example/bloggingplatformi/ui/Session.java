@@ -20,10 +20,6 @@ public final class Session {
     private Session() {
     }
 
-    public static ObjectProperty<User> currentUserProperty() {
-        return CURRENT;
-    }
-
     public static Optional<User> currentUser() {
         return Optional.ofNullable(CURRENT.get());
     }

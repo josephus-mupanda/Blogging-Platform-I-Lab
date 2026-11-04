@@ -4,7 +4,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.regex.Pattern;
 
-import org.example.bloggingplatformi.dao.CommentDao;
 import org.example.bloggingplatformi.dao.DaoFactory;
 import org.example.bloggingplatformi.dao.UserDao;
 import org.example.bloggingplatformi.exception.EntityNotFoundException;
@@ -14,8 +13,8 @@ import org.example.bloggingplatformi.model.User;
 import org.example.bloggingplatformi.util.Passwords;
 
 /**
- * Business rules for user accounts. It validates input, checks that usernames
- * and emails are not taken, and keeps comment author names up to date.
+ * Business rules for user accounts: sign up, sign in, and the checks that
+ * usernames and emails are valid and not already taken.
  */
 public class UserService {
 
@@ -25,15 +24,13 @@ public class UserService {
     private static final int MIN_PASSWORD = 6;
 
     private final UserDao userDao;
-    private final CommentDao commentDao;
 
     public UserService() {
-        this(DaoFactory.users(), DaoFactory.comments());
+        this(DaoFactory.users());
     }
 
-    public UserService(UserDao userDao, CommentDao commentDao) {
+    public UserService(UserDao userDao) {
         this.userDao = userDao;
-        this.commentDao = commentDao;
     }
 
     public Optional<User> findById(long userId) {
@@ -130,30 +127,6 @@ public class UserService {
             errors.throwIfInvalid();
         }
         return user;
-    }
-
-    /**
-     * Updates the display name and bio. If the name changes, the name is also
-     * updated on the user's comments, because MongoDB stores a copy of it there.
-     */
-    public User updateProfile(long userId, String displayName, String bio) {
-        User existing = require(userId);
-
-        ValidationException.Collector errors = new ValidationException.Collector();
-        errors.rejectIf(displayName == null || displayName.isBlank(),
-                "displayName", "A display name is required.");
-        errors.throwIfInvalid();
-
-        boolean nameChanged = !existing.displayName().equals(displayName.strip());
-
-        User updated = existing.withProfile(displayName.strip(), bio);
-        if (!userDao.update(updated)) {
-            throw new EntityNotFoundException("User", userId);
-        }
-        if (nameChanged) {
-            commentDao.renameAuthor(userId, displayName.strip());
-        }
-        return updated;
     }
 
     public User setActive(long userId, boolean active) {

@@ -15,8 +15,6 @@ public interface UserDao {
 
     Optional<User> findByUsername(String username);
 
-    Optional<User> findByEmail(String email);
-
     List<User> findAll(int limit, int offset);
 
     /** Users who have written at least one post. Used by the author filter. */

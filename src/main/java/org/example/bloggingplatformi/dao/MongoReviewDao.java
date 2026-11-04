@@ -77,14 +77,6 @@ public class MongoReviewDao implements ReviewDao {
     }
 
     @Override
-    public List<Review> findByReviewer(long reviewerId, int limit) {
-        return run(() -> collect(reviews()
-                .find(Filters.eq(F_REVIEWER_ID, reviewerId))
-                .sort(Sorts.descending(F_CREATED_AT))
-                .limit(Math.max(1, limit))));
-    }
-
-    @Override
     public Optional<Review> findByPostAndReviewer(long postId, long reviewerId) {
         return run(() -> Optional.ofNullable(reviews()
                 .find(Filters.and(Filters.eq(F_POST_ID, postId),

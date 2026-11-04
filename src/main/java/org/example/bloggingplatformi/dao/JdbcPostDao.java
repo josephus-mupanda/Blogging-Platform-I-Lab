@@ -163,33 +163,6 @@ public class JdbcPostDao implements PostDao {
     }
 
     @Override
-    public List<PostSummary> findByAuthor(long authorId, int limit, int offset) {
-        String sql = "SELECT " + SUMMARY_COLUMNS + """
-                 FROM posts p
-                 JOIN users u ON u.user_id = p.author_id
-                 WHERE p.author_id = ?
-                 ORDER BY p.created_at DESC, p.post_id DESC
-                 LIMIT ? OFFSET ?
-                """;
-        return Database.withConnection(connection -> {
-            try (PreparedStatement ps = connection.prepareStatement(sql)) {
-                ps.setLong(1, authorId);
-                ps.setInt(2, Math.max(1, limit));
-                ps.setInt(3, Math.max(0, offset));
-                try (ResultSet rs = ps.executeQuery()) {
-                    List<PostSummary> rows = new ArrayList<>();
-                    while (rs.next()) {
-                        rows.add(mapSummary(rs));
-                    }
-                    return rows;
-                }
-            } catch (SQLException e) {
-                throw SqlSupport.translate(e, "Post");
-            }
-        });
-    }
-
-    @Override
     public boolean existsBySlug(String slug) {
         if (slug == null || slug.isBlank()) {
             return false;

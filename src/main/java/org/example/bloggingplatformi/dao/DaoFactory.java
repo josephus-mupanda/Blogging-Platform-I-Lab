@@ -90,18 +90,4 @@ public final class DaoFactory {
             case MONGO -> new MongoReviewDao();
         };
     }
-
-    /** Switches the comment and review store while the app runs. Used by tests and benchmarks. */
-    public static synchronized void useCommentStore(CommentStore store) {
-        commentStore = store;
-        commentDao = commentsFor(store);
-        reviewDao = reviewsFor(store);
-    }
-
-    /** Clears the saved instances so the next call reads the config again. */
-    public static synchronized void reset() {
-        commentStore = null;
-        commentDao = null;
-        reviewDao = null;
-    }
 }

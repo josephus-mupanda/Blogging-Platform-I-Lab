@@ -51,18 +51,6 @@ public class CommentService {
         return commentDao.findByPostId(postId, includeHidden);
     }
 
-    public List<Comment> repliesTo(String commentId) {
-        return commentDao.findReplies(commentId);
-    }
-
-    public List<Comment> subtreeOf(String commentId) {
-        return commentDao.findSubtree(commentId);
-    }
-
-    public List<Comment> byAuthor(long authorId, int limit) {
-        return commentDao.findByAuthor(authorId, limit);
-    }
-
     public List<Comment> search(String keyword, int limit) {
         return commentDao.search(keyword, limit);
     }
@@ -122,10 +110,6 @@ public class CommentService {
 
     public Comment hide(String commentId) {
         return moderate(commentId, CommentStatus.HIDDEN);
-    }
-
-    public Comment flag(String commentId) {
-        return moderate(commentId, CommentStatus.FLAGGED);
     }
 
     public Comment restore(String commentId) {

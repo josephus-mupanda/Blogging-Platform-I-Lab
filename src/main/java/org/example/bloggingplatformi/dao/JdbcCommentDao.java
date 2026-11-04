@@ -144,20 +144,6 @@ public class JdbcCommentDao implements CommentDao {
     }
 
     @Override
-    public List<Comment> findByAuthor(long authorId, int limit) {
-        return Database.withConnection(connection -> {
-            try (PreparedStatement ps = connection.prepareStatement(
-                    SELECT_BASE + " WHERE c.author_id = ? ORDER BY c.created_at DESC LIMIT ?")) {
-                ps.setLong(1, authorId);
-                ps.setInt(2, Math.max(1, limit));
-                return mapAll(ps, 0);
-            } catch (SQLException e) {
-                throw SqlSupport.translate(e, "Comment");
-            }
-        });
-    }
-
-    @Override
     public List<Comment> search(String keyword, int limit) {
         if (keyword == null || keyword.isBlank()) {
             return List.of();

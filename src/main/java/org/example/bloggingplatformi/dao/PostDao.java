@@ -1,6 +1,5 @@
 package org.example.bloggingplatformi.dao;
 
-import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
@@ -22,8 +21,6 @@ public interface PostDao {
      * Returns summaries, which leave out the body.
      */
     Page<PostSummary> search(PostFilter filter);
-
-    List<PostSummary> findByAuthor(long authorId, int limit, int offset);
 
     boolean existsBySlug(String slug);
 

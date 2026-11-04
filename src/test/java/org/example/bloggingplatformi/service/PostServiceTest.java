@@ -260,11 +260,6 @@ class PostServiceTest {
         }
 
         @Override
-        public List<PostSummary> findByAuthor(long authorId, int limit, int offset) {
-            return List.of();
-        }
-
-        @Override
         public boolean existsBySlug(String slug) {
             return store.values().stream().anyMatch(p -> p.slug().equals(slug));
         }
@@ -342,11 +337,6 @@ class PostServiceTest {
 
         @Override
         public List<Tag> findByPostId(long postId) {
-            return List.of();
-        }
-
-        @Override
-        public List<Tag> searchByPrefix(String prefix, int limit) {
             return List.of();
         }
 

@@ -14,9 +14,4 @@ public enum CommentStatus {
         }
         return CommentStatus.valueOf(value.trim().toUpperCase());
     }
-
-    /** FLAGGED and HIDDEN comments appear in the moderation queue. */
-    public boolean needsModeration() {
-        return this != VISIBLE;
-    }
 }

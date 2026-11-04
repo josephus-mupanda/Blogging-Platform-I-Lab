@@ -19,9 +19,6 @@ public interface TagDao {
     /** The tags on one post, in alphabetical order. */
     List<Tag> findByPostId(long postId);
 
-    /** Tags whose name starts with the prefix. Used for autocomplete. */
-    List<Tag> searchByPrefix(String prefix, int limit);
-
     /** Maps each tag name to how many posts use it. */
     Map<String, Long> usageCounts(int limit);
 
