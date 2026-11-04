@@ -58,13 +58,13 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  * JavaFX app, with PostgreSQL and MongoDB running. Services are only used to
  * check the database afterwards. It opens a window, so it is not part of mvn test.
  * Run: mvn test -Dtest=UiCrudE2E -Dsurefire.failIfNoSpecifiedTests=false
- * Screenshots are saved to docs/screenshots/.
+ * Screenshots are saved to target/e2e-screenshots/, so the real ones in docs/screenshots/ stay.
  */
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class UiCrudE2E {
 
-    private static final Path SHOTS = Path.of(System.getProperty("e2e.screenshots", "docs/screenshots"));
+    private static final Path SHOTS = Path.of(System.getProperty("e2e.screenshots", "target/e2e-screenshots"));
 
     /** Different on every run, so data left by an old run cannot make a check pass. */
     private final String token = "e2e" + Long.toString(System.currentTimeMillis(), 36);
