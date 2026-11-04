@@ -5,10 +5,8 @@ import java.util.function.Consumer;
 import javafx.application.Platform;
 import javafx.fxml.FXML;
 import javafx.scene.Parent;
-import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.PasswordField;
-import javafx.scene.control.ProgressIndicator;
 import javafx.scene.control.RadioButton;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.VBox;
@@ -32,8 +30,7 @@ public class LoginController {
     @FXML private PasswordField loginPassword;
     @FXML private Label message;
     @FXML private Label signInError;
-    @FXML private Button signInButton;
-    @FXML private ProgressIndicator spinner;
+    @FXML private VBox loginLoading;
 
     @FXML private VBox signUpCard;
     @FXML private TextField signupName;
@@ -62,8 +59,8 @@ public class LoginController {
         String username = loginUsername.getText();
         String password = loginPassword.getText();
         signInError.setText("");
-        signInButton.setDisable(true);
-        spinner.setVisible(true);
+        signInCard.setDisable(true);
+        loginLoading.setVisible(true);
 
         new Thread(() -> {
             try {
@@ -72,8 +69,8 @@ public class LoginController {
             } catch (RuntimeException e) {
                 Platform.runLater(() -> {
                     signInError.setText(e.getMessage());
-                    signInButton.setDisable(false);
-                    spinner.setVisible(false);
+                    signInCard.setDisable(false);
+                    loginLoading.setVisible(false);
                 });
             }
         }).start();

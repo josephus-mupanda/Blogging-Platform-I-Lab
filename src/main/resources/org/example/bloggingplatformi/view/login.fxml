@@ -31,9 +31,7 @@
         <Label fx:id="message" styleClass="success-text" wrapText="true"/>
         <Label fx:id="signInError" styleClass="error-text" wrapText="true"/>
 
-        <Button fx:id="signInButton" text="Sign in" styleClass="primary" maxWidth="Infinity" onAction="#signIn"/>
-        <!-- Spins while the password is being checked. -->
-        <ProgressIndicator fx:id="spinner" visible="false" prefWidth="24" prefHeight="24"/>
+        <Button text="Sign in" styleClass="primary" maxWidth="Infinity" onAction="#signIn"/>
         <Button text="No account yet? Sign up" styleClass="link" onAction="#showSignUp"/>
     </VBox>
 
@@ -60,5 +58,10 @@
         <Label fx:id="signUpError" styleClass="error-text" wrapText="true"/>
         <Button text="Create account" styleClass="primary" maxWidth="Infinity" onAction="#signUp"/>
         <Button text="Already have an account? Sign in" styleClass="link" onAction="#showSignIn"/>
+    </VBox>
+    <VBox fx:id="loginLoading" alignment="CENTER" spacing="10" styleClass="card"
+          maxWidth="-Infinity" maxHeight="-Infinity" visible="false" managed="${loginLoading.visible}">
+        <ProgressIndicator prefWidth="32" prefHeight="32"/>
+        <Label text="Signing in…" styleClass="field-label"/>
     </VBox>
 </StackPane>

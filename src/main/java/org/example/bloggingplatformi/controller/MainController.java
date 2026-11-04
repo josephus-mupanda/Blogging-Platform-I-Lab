@@ -4,9 +4,13 @@ import javafx.fxml.FXML;
 import javafx.scene.Parent;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
+import javafx.scene.input.KeyCode;
 import javafx.scene.layout.StackPane;
+import javafx.scene.layout.VBox;
 
+import org.example.bloggingplatformi.model.Post;
 import org.example.bloggingplatformi.model.User;
+import org.example.bloggingplatformi.ui.Dates;
 import org.example.bloggingplatformi.ui.Dialogs;
 import org.example.bloggingplatformi.ui.Fxml;
 import org.example.bloggingplatformi.ui.Session;
@@ -58,7 +62,7 @@ public class MainController {
 
     @FXML
     public void showDashboard() {
-        show("Dashboard", new DashboardController().getRoot());
+        show("Dashboard", new DashboardController(this).getRoot());
     }
 
     @FXML
@@ -68,6 +72,29 @@ public class MainController {
 
     public void showPost(long postId) {
         show("Post", new PostDetailController(this, postId).getRoot());
+    }
+
+    Button postCard(Post post) {
+        Label title = new Label(post.title());
+        title.setWrapText(true);
+        title.getStyleClass().add("subtitle");
+        Label byline = new Label(post.authorName() + "  ·  " + Dates.format(post.createdAt()));
+        byline.setWrapText(true);
+        byline.getStyleClass().add("small");
+
+        Button card = new Button();
+        card.setGraphic(new VBox(4, title, byline));
+        card.setAccessibleText(post.title() + ", by " + post.authorName());
+        card.setMaxWidth(Double.MAX_VALUE);
+        card.getStyleClass().add("post-card");
+        card.setOnAction(event -> showPost(post.id()));
+        card.setOnKeyPressed(event -> {
+            if (event.getCode() == KeyCode.ENTER) {
+                event.consume();
+                card.fire();
+            }
+        });
+        return card;
     }
 
     /** postId = null for a new post. */

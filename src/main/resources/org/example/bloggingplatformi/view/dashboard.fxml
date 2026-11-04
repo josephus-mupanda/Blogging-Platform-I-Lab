@@ -5,6 +5,7 @@
 <?import javafx.geometry.Insets?>
 <?import javafx.scene.control.Label?>
 <?import javafx.scene.control.ListView?>
+<?import javafx.scene.control.ScrollPane?>
 <?import javafx.scene.layout.HBox?>
 <?import javafx.scene.layout.VBox?>
 
@@ -25,7 +26,9 @@
     <HBox spacing="14" VBox.vgrow="ALWAYS">
         <VBox spacing="8" styleClass="card" HBox.hgrow="ALWAYS">
             <Label text="Latest posts" styleClass="subtitle"/>
-            <ListView fx:id="latestPosts" VBox.vgrow="ALWAYS"/>
+            <ScrollPane fitToWidth="true" hbarPolicy="NEVER" styleClass="content-scroll" VBox.vgrow="ALWAYS">
+                <VBox fx:id="latestPosts" spacing="8"/>
+            </ScrollPane>
         </VBox>
         <VBox spacing="8" styleClass="card" prefWidth="320">
             <Label text="Most used tags" styleClass="subtitle"/>

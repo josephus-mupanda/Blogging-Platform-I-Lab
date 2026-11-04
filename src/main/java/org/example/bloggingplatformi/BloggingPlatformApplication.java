@@ -1,7 +1,9 @@
 package org.example.bloggingplatformi;
 
 import javafx.application.Application;
+import javafx.geometry.Rectangle2D;
 import javafx.scene.Scene;
+import javafx.stage.Screen;
 import javafx.stage.Stage;
 
 import org.example.bloggingplatformi.controller.LoginController;
@@ -21,11 +23,20 @@ public class BloggingPlatformApplication extends Application {
 
     @Override
     public void start(Stage stage) {
-        scene = new Scene(new LoginController(this::showMainWindow).getRoot(), 1200, 760);
+        scene = new Scene(new LoginController(this::showMainWindow).getRoot());
         scene.getStylesheets().add(getClass().getResource("/org/example/bloggingplatformi/css/app.css").toExternalForm());
 
         stage.setTitle("Blogfold - Smart Blogging Platform");
         stage.setScene(scene);
+
+        // Size the whole window, including its title bar, to the desktop area above the taskbar.
+        Rectangle2D workArea = Screen.getPrimary().getVisualBounds();
+        double width = Math.min(1200, workArea.getWidth());
+        double height = Math.min(760, workArea.getHeight());
+        stage.setWidth(width);
+        stage.setHeight(height);
+        stage.setX(workArea.getMinX() + (workArea.getWidth() - width) / 2);
+        stage.setY(workArea.getMinY() + (workArea.getHeight() - height) / 2);
         stage.show();
     }
 

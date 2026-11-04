@@ -30,6 +30,44 @@
 .error-text   { -fx-text-fill: #b91c1c; }
 .success-text { -fx-text-fill: #047857; }
 
+.content-scroll, .content-scroll > .viewport {
+    -fx-background-color: transparent;
+}
+.content-scroll {
+    -fx-padding: 0;
+}
+.post-card {
+    -fx-alignment: center-left;
+    -fx-background-color: white;
+    -fx-background-radius: 8;
+    -fx-border-color: #e5e7eb;
+    -fx-border-radius: 8;
+    -fx-padding: 12 14;
+}
+.post-card:hover, .post-card:focused {
+    -fx-background-color: #eef2ff;
+    -fx-border-color: #6366f1;
+}
+.discussion {
+    -fx-background-color: #f8fafc;
+    -fx-background-radius: 6;
+}
+.discussion .list-cell {
+    -fx-background-color: #f8fafc;
+    -fx-padding: 10 12;
+}
+.discussion .list-cell:filled {
+    -fx-border-color: transparent transparent #e5e7eb transparent;
+}
+.discussion .list-cell:filled:selected {
+    -fx-background-color: #eef2ff;
+    -fx-border-color: #a5b4fc;
+}
+.rating {
+    -fx-font-weight: bold;
+    -fx-text-fill: #92400e;
+}
+
 /* Buttons */
 .button {
     -fx-background-radius: 6;

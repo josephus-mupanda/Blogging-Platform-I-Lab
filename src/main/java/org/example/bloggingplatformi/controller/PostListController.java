@@ -1,14 +1,15 @@
 package org.example.bloggingplatformi.controller;
 
-import javafx.beans.property.SimpleStringProperty;
+import java.util.List;
+
 import javafx.fxml.FXML;
 import javafx.scene.Parent;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
-import javafx.scene.control.TableColumn;
-import javafx.scene.control.TableView;
+import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TextField;
+import javafx.scene.layout.VBox;
 
 import org.example.bloggingplatformi.model.Post;
 import org.example.bloggingplatformi.model.Tag;
@@ -16,7 +17,6 @@ import org.example.bloggingplatformi.model.User;
 import org.example.bloggingplatformi.service.PostService;
 import org.example.bloggingplatformi.service.TagService;
 import org.example.bloggingplatformi.service.UserService;
-import org.example.bloggingplatformi.ui.Dates;
 import org.example.bloggingplatformi.ui.Dialogs;
 import org.example.bloggingplatformi.ui.Fxml;
 import org.example.bloggingplatformi.ui.Session;
@@ -36,13 +36,9 @@ public class PostListController {
     @FXML private TextField searchField;
     @FXML private ComboBox<User> authorBox;
     @FXML private ComboBox<Tag> tagBox;
-    @FXML private TableView<Post> table;
-    @FXML private TableColumn<Post, String> titleColumn;
-    @FXML private TableColumn<Post, String> authorColumn;
-    @FXML private TableColumn<Post, String> dateColumn;
-    @FXML private Button openButton;
-    @FXML private Button editButton;
-    @FXML private Button deleteButton;
+    @FXML private VBox postCards;
+    @FXML private ScrollPane resultsScroll;
+    @FXML private Label emptyResults;
     @FXML private Button newButton;
     @FXML private Button previousButton;
     @FXML private Button nextButton;
@@ -59,17 +55,8 @@ public class PostListController {
 
     @FXML
     private void initialize() {
-        // What each column shows for a post.
-        titleColumn.setCellValueFactory(row -> new SimpleStringProperty(row.getValue().title()));
-        authorColumn.setCellValueFactory(row -> new SimpleStringProperty(row.getValue().authorName()));
-        dateColumn.setCellValueFactory(row -> new SimpleStringProperty(Dates.format(row.getValue().createdAt())));
-
-        // Readers cannot write posts, so they do not see "New post".
         newButton.setVisible(Session.canWritePosts());
-
-        // Enable the buttons only when a row is selected, and Edit / Delete only for the author or the admin.
-        table.getSelectionModel().selectedItemProperty().addListener((observable, oldPost, post) -> updateButtons(post));
-        updateButtons(null);
+        newButton.managedProperty().bind(newButton.visibleProperty());
 
         try {
             authorBox.getItems().setAll(userService.findAuthors());
@@ -81,26 +68,30 @@ public class PostListController {
     }
 
     /** Reads the current page from the database with the current filters. */
-    private void loadPage() {
+    private List<Post> loadPage() {
         String keyword = searchField.getText();
         Long authorId = authorBox.getValue() == null ? null : authorBox.getValue().id();
         Long tagId = tagBox.getValue() == null ? null : tagBox.getValue().id();
 
         totalPages = postService.countPages(keyword, authorId, tagId);
-        table.getItems().setAll(postService.search(keyword, authorId, tagId, page));
+        List<Post> posts = postService.search(keyword, authorId, tagId, page);
+        postCards.getChildren().setAll(posts.stream().map(main::postCard).toList());
+        resultsScroll.setVvalue(0);
+        emptyResults.setVisible(posts.isEmpty());
 
         pageLabel.setText("Page " + (page + 1) + " of " + totalPages);
         previousButton.setDisable(page == 0);
         nextButton.setDisable(page >= totalPages - 1);
+        return posts;
     }
 
-    private void updateButtons(Post post) {
-        openButton.setDisable(post == null);
-        boolean canEdit = post != null && Session.canEditPost(post.authorId());
-        editButton.setDisable(!canEdit);
-        deleteButton.setDisable(!canEdit);
-        editButton.setVisible(Session.canWritePosts());
-        deleteButton.setVisible(Session.canWritePosts());
+    @FXML
+    private void searchOnEnter() {
+        page = 0;
+        List<Post> posts = loadPage();
+        if (!searchField.getText().isBlank() && posts.size() == 1) {
+            main.showPost(posts.getFirst().id());
+        }
     }
 
     @FXML
@@ -130,30 +121,7 @@ public class PostListController {
     }
 
     @FXML
-    private void openPost() {
-        main.showPost(table.getSelectionModel().getSelectedItem().id());
-    }
-
-    @FXML
-    private void editPost() {
-        main.showEditor(table.getSelectionModel().getSelectedItem().id());
-    }
-
-    @FXML
     private void newPost() {
         main.showEditor(null);
-    }
-
-    @FXML
-    private void deletePost() {
-        Post post = table.getSelectionModel().getSelectedItem();
-        if (Dialogs.confirm("Delete \"" + post.title() + "\"? Its comments and reviews are deleted too.")) {
-            try {
-                postService.delete(post.id());
-                loadPage();
-            } catch (RuntimeException e) {
-                Dialogs.error("Could not delete the post: " + e.getMessage());
-            }
-        }
     }
 }

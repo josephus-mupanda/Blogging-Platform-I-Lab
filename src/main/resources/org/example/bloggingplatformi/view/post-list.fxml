@@ -1,13 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<!-- Posts: search and filters, the table of posts, the buttons, and Previous / Next pages. -->
+<!-- Search, filter, and open post cards. -->
 
 <?import javafx.geometry.Insets?>
 <?import javafx.scene.control.Button?>
 <?import javafx.scene.control.ComboBox?>
 <?import javafx.scene.control.Label?>
-<?import javafx.scene.control.TableColumn?>
-<?import javafx.scene.control.TableView?>
+<?import javafx.scene.control.ScrollPane?>
 <?import javafx.scene.control.TextField?>
 <?import javafx.scene.layout.HBox?>
 <?import javafx.scene.layout.Region?>
@@ -20,29 +19,22 @@
 
     <!-- Search and filters. Pressing Enter or choosing a filter runs the search. -->
     <HBox spacing="10" alignment="CENTER_LEFT" styleClass="card">
-        <TextField fx:id="searchField" promptText="Search in titles and text" prefWidth="280" onAction="#search"/>
-        <ComboBox fx:id="authorBox" promptText="All authors" prefWidth="170" onAction="#search"/>
-        <ComboBox fx:id="tagBox" promptText="All tags" prefWidth="150" onAction="#search"/>
+        <TextField fx:id="searchField" promptText="Search titles and text" prefWidth="280"
+                   onAction="#searchOnEnter" HBox.hgrow="ALWAYS"/>
+        <ComboBox fx:id="authorBox" promptText="All authors" prefWidth="145" onAction="#search"/>
+        <ComboBox fx:id="tagBox" promptText="All tags" prefWidth="120" onAction="#search"/>
         <Button text="Search" styleClass="primary" onAction="#search"/>
         <Button text="Clear" onAction="#clearFilters"/>
     </HBox>
 
-    <TableView fx:id="table" VBox.vgrow="ALWAYS">
-        <placeholder><Label text="No posts found."/></placeholder>
-        <!-- The columns share the whole width of the table. -->
-        <columnResizePolicy><TableView fx:constant="CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN"/></columnResizePolicy>
-        <columns>
-            <TableColumn fx:id="titleColumn" text="Title" prefWidth="460"/>
-            <TableColumn fx:id="authorColumn" text="Author" prefWidth="180"/>
-            <TableColumn fx:id="dateColumn" text="Date" prefWidth="180"/>
-        </columns>
-    </TableView>
+    <ScrollPane fx:id="resultsScroll" fitToWidth="true" hbarPolicy="NEVER" styleClass="content-scroll" VBox.vgrow="ALWAYS">
+        <VBox>
+            <Label fx:id="emptyResults" text="No posts found." styleClass="small" visible="false" managed="${emptyResults.visible}"/>
+            <VBox fx:id="postCards" spacing="10"/>
+        </VBox>
+    </ScrollPane>
 
     <HBox spacing="10" alignment="CENTER_LEFT">
-        <!-- These buttons act on the selected row. -->
-        <Button fx:id="openButton" text="Open" onAction="#openPost"/>
-        <Button fx:id="editButton" text="Edit" onAction="#editPost"/>
-        <Button fx:id="deleteButton" text="Delete" styleClass="danger" onAction="#deletePost"/>
         <!-- Hidden for readers. -->
         <Button fx:id="newButton" text="New post" styleClass="primary" onAction="#newPost"/>
         <Region HBox.hgrow="ALWAYS"/>

@@ -1,62 +1,64 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<!-- One post: the post (PostgreSQL) on top, its comments (MongoDB) on the left, its reviews (MongoDB) on the right. -->
-
 <?import javafx.geometry.Insets?>
 <?import javafx.scene.control.Button?>
 <?import javafx.scene.control.ComboBox?>
 <?import javafx.scene.control.Label?>
 <?import javafx.scene.control.ListView?>
+<?import javafx.scene.control.ScrollPane?>
 <?import javafx.scene.control.TextField?>
 <?import javafx.scene.layout.HBox?>
 <?import javafx.scene.layout.VBox?>
 
-<VBox xmlns="http://javafx.com/javafx" xmlns:fx="http://javafx.com/fxml"
-      fx:controller="org.example.bloggingplatformi.controller.PostDetailController"
-      spacing="14">
-    <padding><Insets top="24" right="24" bottom="24" left="24"/></padding>
+<ScrollPane xmlns="http://javafx.com/javafx" xmlns:fx="http://javafx.com/fxml"
+            fx:controller="org.example.bloggingplatformi.controller.PostDetailController"
+            fitToWidth="true" hbarPolicy="NEVER" styleClass="content-scroll">
+    <VBox spacing="14">
+        <padding><Insets top="24" right="24" bottom="24" left="24"/></padding>
 
-    <!-- The post -->
-    <VBox spacing="8" styleClass="card">
-        <Label fx:id="titleLabel" styleClass="title" wrapText="true"/>
-        <Label fx:id="infoLabel" styleClass="small"/>
-        <Label fx:id="bodyLabel" wrapText="true"/>
-        <HBox spacing="10">
-            <Button text="Back to posts" onAction="#back"/>
-            <!-- Only for the post's author and the admin. -->
-            <Button fx:id="editButton" text="Edit" onAction="#editPost"/>
-        </HBox>
-    </VBox>
+        <VBox spacing="8" styleClass="card">
+            <Label fx:id="titleLabel" styleClass="title" wrapText="true"/>
+            <Label fx:id="infoLabel" styleClass="small" wrapText="true"/>
+            <Label fx:id="bodyLabel" wrapText="true"/>
+            <HBox spacing="10">
+                <Button text="Back to posts" onAction="#back"/>
+                <Button fx:id="editButton" text="Edit" onAction="#editPost"
+                        visible="false" managed="${editButton.visible}"/>
+                <Button fx:id="deleteButton" text="Delete post" styleClass="danger" onAction="#deletePost"
+                        visible="false" managed="${deleteButton.visible}"/>
+            </HBox>
+        </VBox>
 
-    <!-- A validation message, for example "A comment cannot be empty." -->
-    <Label fx:id="errorLabel" styleClass="error-text" wrapText="true"/>
+        <Label fx:id="errorLabel" styleClass="error-text" wrapText="true" managed="${errorLabel.visible}"/>
 
-    <HBox spacing="14" VBox.vgrow="ALWAYS">
-        <!-- Comments -->
-        <VBox spacing="8" styleClass="card" HBox.hgrow="ALWAYS">
+        <VBox spacing="10" styleClass="card">
             <Label text="Comments" styleClass="subtitle"/>
-            <ListView fx:id="commentList" VBox.vgrow="ALWAYS"/>
+            <ListView fx:id="commentList" prefHeight="150" styleClass="discussion">
+                <placeholder><Label text="No comments yet." styleClass="small"/></placeholder>
+            </ListView>
             <HBox spacing="8">
-                <TextField fx:id="commentField" promptText="Write a comment" HBox.hgrow="ALWAYS" onAction="#addComment"/>
+                <TextField fx:id="commentField" promptText="Write a comment"
+                           HBox.hgrow="ALWAYS" onAction="#addComment"/>
                 <Button text="Comment" styleClass="primary" onAction="#addComment"/>
             </HBox>
-            <!-- Only for your own comments (or for the admin). -->
             <HBox spacing="8">
                 <Button fx:id="editCommentButton" text="Edit selected" onAction="#editComment"/>
                 <Button fx:id="deleteCommentButton" text="Delete selected" styleClass="danger" onAction="#deleteComment"/>
             </HBox>
         </VBox>
 
-        <!-- Reviews -->
-        <VBox spacing="8" styleClass="card" prefWidth="380">
+        <VBox spacing="10" styleClass="card">
             <Label text="Reviews" styleClass="subtitle"/>
-            <Label fx:id="averageLabel"/>
-            <ListView fx:id="reviewList" VBox.vgrow="ALWAYS"/>
+            <Label fx:id="averageLabel" styleClass="rating"/>
+            <ListView fx:id="reviewList" prefHeight="150" styleClass="discussion">
+                <placeholder><Label text="Be the first to leave a rating." styleClass="small"/></placeholder>
+            </ListView>
             <HBox spacing="8">
                 <ComboBox fx:id="ratingBox" promptText="Rating" prefWidth="100"/>
-                <TextField fx:id="reviewField" promptText="Your review (optional)" HBox.hgrow="ALWAYS"/>
+                <TextField fx:id="reviewField" promptText="Your review (optional)"
+                           HBox.hgrow="ALWAYS" onAction="#addReview"/>
+                <Button text="Add review" styleClass="primary" onAction="#addReview"/>
             </HBox>
-            <Button text="Add review" styleClass="primary" onAction="#addReview"/>
         </VBox>
-    </HBox>
-</VBox>
+    </VBox>
+</ScrollPane>

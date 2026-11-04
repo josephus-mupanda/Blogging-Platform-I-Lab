@@ -6,6 +6,7 @@ import javafx.fxml.FXML;
 import javafx.scene.Parent;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListView;
+import javafx.scene.layout.VBox;
 
 import org.example.bloggingplatformi.model.Post;
 import org.example.bloggingplatformi.service.CommentService;
@@ -13,13 +14,13 @@ import org.example.bloggingplatformi.service.PostService;
 import org.example.bloggingplatformi.service.ReviewService;
 import org.example.bloggingplatformi.service.TagService;
 import org.example.bloggingplatformi.service.UserService;
-import org.example.bloggingplatformi.ui.Dates;
 import org.example.bloggingplatformi.ui.Dialogs;
 import org.example.bloggingplatformi.ui.Fxml;
 
 /** Controller of dashboard.fxml: counts from PostgreSQL and MongoDB, latest posts, most used tags. */
 public class DashboardController {
 
+    private final MainController main;
     private final PostService postService = new PostService();
     private final CommentService commentService = new CommentService();
     private final ReviewService reviewService = new ReviewService();
@@ -32,10 +33,11 @@ public class DashboardController {
     @FXML private Label reviewsCount;
     @FXML private Label usersCount;
     @FXML private Label tagsCount;
-    @FXML private ListView<String> latestPosts;
+    @FXML private VBox latestPosts;
     @FXML private ListView<String> topTags;
 
-    public DashboardController() {
+    public DashboardController(MainController main) {
+        this.main = main;
         this.root = Fxml.load("dashboard.fxml", this);
     }
 
@@ -50,8 +52,14 @@ public class DashboardController {
             postsCount.setText(String.valueOf(postService.count()));
             usersCount.setText(String.valueOf(userService.count()));
             tagsCount.setText(String.valueOf(tagService.count()));
-            for (Post post : postService.latest(10)) {
-                latestPosts.getItems().add(post.title() + "  -  " + post.authorName() + ", " + Dates.format(post.createdAt()));
+            var posts = postService.latest(10);
+            for (Post post : posts) {
+                latestPosts.getChildren().add(main.postCard(post));
+            }
+            if (posts.isEmpty()) {
+                Label empty = new Label("No posts yet.");
+                empty.getStyleClass().add("small");
+                latestPosts.getChildren().add(empty);
             }
             for (Map.Entry<String, Integer> tag : tagService.usage().entrySet()) {
                 topTags.getItems().add(tag.getKey() + "  (" + tag.getValue() + " posts)");
