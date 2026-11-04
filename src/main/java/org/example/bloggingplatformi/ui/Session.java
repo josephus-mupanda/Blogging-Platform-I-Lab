@@ -1,65 +1,38 @@
 package org.example.bloggingplatformi.ui;
 
-import java.util.Optional;
-
-import javafx.beans.property.ObjectProperty;
-import javafx.beans.property.SimpleObjectProperty;
-
-import org.example.bloggingplatformi.model.Role;
 import org.example.bloggingplatformi.model.User;
 
-/**
- * Keeps track of the user who is signed in.
- * It is set by the sign in screen and cleared by "Sign out".
- * The views ask it what the current user is allowed to do.
- */
+/** Remembers who is signed in. Set by the sign in screen, cleared by "Sign out". */
 public final class Session {
 
-    private static final ObjectProperty<User> CURRENT = new SimpleObjectProperty<>();
+    private static User currentUser;
 
     private Session() {
     }
 
-    public static Optional<User> currentUser() {
-        return Optional.ofNullable(CURRENT.get());
+    public static User user() {
+        return currentUser;
     }
 
-    public static void setCurrentUser(User user) {
-        CURRENT.set(user);
+    public static void signIn(User user) {
+        currentUser = user;
     }
 
-    public static boolean isSignedIn() {
-        return CURRENT.get() != null;
+    public static void signOut() {
+        currentUser = null;
     }
 
-    /** The signed-in user's id, or 0 when nobody is signed in. */
-    public static long currentUserId() {
-        User user = CURRENT.get();
-        return user == null ? 0L : user.userId();
+    /** Bloggers (AUTHOR) and the admin can write posts. */
+    public static boolean canWritePosts() {
+        return currentUser != null && currentUser.role().canWritePosts();
     }
 
-    public static String currentDisplayName() {
-        User user = CURRENT.get();
-        return user == null ? "Not signed in" : user.displayName();
+    public static boolean isAdmin() {
+        return currentUser != null && currentUser.role().isAdmin();
     }
 
-    public static Role currentRole() {
-        User user = CURRENT.get();
-        return user == null ? Role.READER : user.role();
-    }
-
-    /** Readers may comment and review; they may not author posts. */
-    public static boolean canPublish() {
-        return isSignedIn() && currentRole().canPublish();
-    }
-
-    /** Only an admin sees the moderation queue and the Manage screens. */
-    public static boolean canModerate() {
-        return isSignedIn() && currentRole().canModerate();
-    }
-
-    /** A post can be edited or deleted by its own author, or by an admin. */
-    public static boolean canEditPost(long postAuthorId) {
-        return canModerate() || (canPublish() && postAuthorId == currentUserId());
+    /** A post can be edited or deleted by its author, or by the admin. */
+    public static boolean canEditPost(long authorId) {
+        return currentUser != null && (currentUser.id() == authorId || isAdmin());
     }
 }

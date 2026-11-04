@@ -1,96 +1,35 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<!--
-  Dashboard: six number tiles, the latest published posts and the most used tags.
-  The controller places the tiles in 1 to 3 columns depending on the window width,
-  and fills the two lists.
-  Controller: org.example.bloggingplatformi.controller.DashboardController
--->
+<!-- Dashboard (analytics): how many rows there are, the latest posts and the most used tags. -->
 
 <?import javafx.geometry.Insets?>
 <?import javafx.scene.control.Label?>
-<?import javafx.scene.control.ScrollPane?>
-<?import javafx.scene.layout.GridPane?>
+<?import javafx.scene.control.ListView?>
 <?import javafx.scene.layout.HBox?>
-<?import javafx.scene.layout.Region?>
-<?import javafx.scene.layout.StackPane?>
 <?import javafx.scene.layout.VBox?>
 
-<ScrollPane xmlns="http://javafx.com/javafx" xmlns:fx="http://javafx.com/fxml"
-            fx:controller="org.example.bloggingplatformi.controller.DashboardController"
-            fitToWidth="true">
-    <VBox spacing="20">
-        <padding><Insets top="24" right="26" bottom="28" left="26"/></padding>
+<VBox xmlns="http://javafx.com/javafx" xmlns:fx="http://javafx.com/fxml"
+      fx:controller="org.example.bloggingplatformi.controller.DashboardController"
+      spacing="20">
+    <padding><Insets top="24" right="24" bottom="24" left="24"/></padding>
 
-        <!-- ===================== Number tiles ===================== -->
-        <GridPane fx:id="metricGrid" hgap="14" vgap="14">
-            <HBox fx:id="postsTile" spacing="14" alignment="CENTER_LEFT" styleClass="metric-tile">
-                <Region styleClass="metric-accent" minHeight="42" style="-fx-background-color: #4f46e5;"/>
-                <VBox spacing="2" HBox.hgrow="ALWAYS">
-                    <Label text="POSTS" styleClass="text-eyebrow"/>
-                    <Label fx:id="postsValue" text="—" styleClass="text-metric"/>
-                </VBox>
-                <StackPane fx:id="postsIcon"/>
-            </HBox>
-            <HBox fx:id="publishedTile" spacing="14" alignment="CENTER_LEFT" styleClass="metric-tile">
-                <Region styleClass="metric-accent" minHeight="42" style="-fx-background-color: #047857;"/>
-                <VBox spacing="2" HBox.hgrow="ALWAYS">
-                    <Label text="PUBLISHED" styleClass="text-eyebrow"/>
-                    <Label fx:id="publishedValue" text="—" styleClass="text-metric"/>
-                </VBox>
-                <StackPane fx:id="publishedIcon"/>
-            </HBox>
-            <HBox fx:id="commentsTile" spacing="14" alignment="CENTER_LEFT" styleClass="metric-tile">
-                <Region styleClass="metric-accent" minHeight="42" style="-fx-background-color: #b45309;"/>
-                <VBox spacing="2" HBox.hgrow="ALWAYS">
-                    <Label text="COMMENTS" styleClass="text-eyebrow"/>
-                    <Label fx:id="commentsValue" text="—" styleClass="text-metric"/>
-                </VBox>
-                <StackPane fx:id="commentsIcon"/>
-            </HBox>
-            <HBox fx:id="reviewsTile" spacing="14" alignment="CENTER_LEFT" styleClass="metric-tile">
-                <Region styleClass="metric-accent" minHeight="42" style="-fx-background-color: #be185d;"/>
-                <VBox spacing="2" HBox.hgrow="ALWAYS">
-                    <Label text="REVIEWS" styleClass="text-eyebrow"/>
-                    <Label fx:id="reviewsValue" text="—" styleClass="text-metric"/>
-                </VBox>
-                <StackPane fx:id="reviewsIcon"/>
-            </HBox>
-            <HBox fx:id="usersTile" spacing="14" alignment="CENTER_LEFT" styleClass="metric-tile">
-                <Region styleClass="metric-accent" minHeight="42" style="-fx-background-color: #0369a1;"/>
-                <VBox spacing="2" HBox.hgrow="ALWAYS">
-                    <Label text="ACCOUNTS" styleClass="text-eyebrow"/>
-                    <Label fx:id="usersValue" text="—" styleClass="text-metric"/>
-                </VBox>
-                <StackPane fx:id="usersIcon"/>
-            </HBox>
-            <HBox fx:id="tagsTile" spacing="14" alignment="CENTER_LEFT" styleClass="metric-tile">
-                <Region styleClass="metric-accent" minHeight="42" style="-fx-background-color: #6d28d9;"/>
-                <VBox spacing="2" HBox.hgrow="ALWAYS">
-                    <Label text="TAGS" styleClass="text-eyebrow"/>
-                    <Label fx:id="tagsValue" text="—" styleClass="text-metric"/>
-                </VBox>
-                <StackPane fx:id="tagsIcon"/>
-            </HBox>
-        </GridPane>
+    <!-- The counts -->
+    <HBox spacing="14">
+        <VBox styleClass="card" HBox.hgrow="ALWAYS"><Label text="Posts"/><Label fx:id="postsCount" styleClass="number"/></VBox>
+        <VBox styleClass="card" HBox.hgrow="ALWAYS"><Label text="Comments"/><Label fx:id="commentsCount" styleClass="number"/></VBox>
+        <VBox styleClass="card" HBox.hgrow="ALWAYS"><Label text="Reviews"/><Label fx:id="reviewsCount" styleClass="number"/></VBox>
+        <VBox styleClass="card" HBox.hgrow="ALWAYS"><Label text="Users"/><Label fx:id="usersCount" styleClass="number"/></VBox>
+        <VBox styleClass="card" HBox.hgrow="ALWAYS"><Label text="Tags"/><Label fx:id="tagsCount" styleClass="number"/></VBox>
+    </HBox>
 
-        <!-- ===================== Two panels ===================== -->
-        <GridPane fx:id="panelGrid" hgap="14" vgap="14">
-            <VBox fx:id="recentCard" styleClass="card-flush">
-                <VBox styleClass="card-header"><Label text="Recently published" styleClass="text-subtitle"/></VBox>
-                <VBox>
-                    <padding><Insets top="14" right="18" bottom="16" left="18"/></padding>
-                    <VBox fx:id="recentPanel" spacing="10"/>
-                </VBox>
-            </VBox>
-
-            <VBox fx:id="tagsCard" styleClass="card-flush">
-                <VBox styleClass="card-header"><Label text="Most used tags" styleClass="text-subtitle"/></VBox>
-                <VBox>
-                    <padding><Insets top="14" right="18" bottom="16" left="18"/></padding>
-                    <VBox fx:id="tagPanel" spacing="10"/>
-                </VBox>
-            </VBox>
-        </GridPane>
-    </VBox>
-</ScrollPane>
+    <HBox spacing="14" VBox.vgrow="ALWAYS">
+        <VBox spacing="8" styleClass="card" HBox.hgrow="ALWAYS">
+            <Label text="Latest posts" styleClass="subtitle"/>
+            <ListView fx:id="latestPosts" VBox.vgrow="ALWAYS"/>
+        </VBox>
+        <VBox spacing="8" styleClass="card" prefWidth="320">
+            <Label text="Most used tags" styleClass="subtitle"/>
+            <ListView fx:id="topTags" VBox.vgrow="ALWAYS"/>
+        </VBox>
+    </HBox>
+</VBox>

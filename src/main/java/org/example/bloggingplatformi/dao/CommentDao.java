@@ -1,86 +1,71 @@
 package org.example.bloggingplatformi.dao;
 
-import java.util.Collection;
-import java.util.HashMap;
+import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
-import java.util.Map;
-import java.util.Optional;
 
+import com.mongodb.client.MongoCollection;
+import com.mongodb.client.model.Filters;
+import com.mongodb.client.model.Sorts;
+import com.mongodb.client.model.Updates;
+import org.bson.Document;
+import org.bson.types.ObjectId;
+
+import org.example.bloggingplatformi.db.Mongo;
 import org.example.bloggingplatformi.model.Comment;
-import org.example.bloggingplatformi.model.CommentStatus;
 
 /**
- * Reads and writes comments. There are two versions: JdbcCommentDao (PostgreSQL)
- * and MongoCommentDao (MongoDB), chosen by the app.comments.store setting.
- * Ids are Strings because PostgreSQL uses a number and MongoDB uses an ObjectId.
+ * Reads and writes the "comments" collection in MongoDB.
+ * A comment is a document like:
+ * { postId: 1, authorId: 2, authorName: "Serge", body: "Nice post", createdAt: ... }
  */
-public interface CommentDao {
+public class CommentDao {
 
-    /** Name of the store in use, shown in benchmark output and the status bar. */
-    String storeName();
-
-    Optional<Comment> findById(String commentId);
-
-    /**
-     * All comments on a post, with each parent before its replies.
-     * The UI can indent each one by its depth without building a tree.
-     */
-    List<Comment> findByPostId(long postId, boolean includeHidden);
-
-    /** Direct replies to one comment. */
-    List<Comment> findReplies(String parentId);
-
-    /**
-     * The comment and all replies under it. MongoDB matches on the path prefix.
-     * PostgreSQL uses a recursive query.
-     */
-    List<Comment> findSubtree(String rootCommentId);
-
-    /** Searches comment bodies for a keyword, ignoring case. */
-    List<Comment> search(String keyword, int limit);
-
-    /** Comments waiting for moderation: everything that is not VISIBLE. */
-    List<Comment> findForModeration(int limit);
-
-    long countByPostId(long postId, boolean includeHidden);
-
-    /**
-     * Visible comment counts for many posts at once.
-     * Posts with no comments may be missing from the map. Both stores override
-     * this default loop with one grouped query, so a page of 20 posts needs one query.
-     */
-    default Map<Long, Long> countVisibleByPostIds(Collection<Long> postIds) {
-        Map<Long, Long> counts = new HashMap<>();
-        for (Long postId : postIds) {
-            counts.put(postId, countByPostId(postId, false));
-        }
-        return counts;
+    private MongoCollection<Document> comments() {
+        return Mongo.database().getCollection("comments");
     }
 
-    long count();
+    /** The comments of a post, oldest first. */
+    public List<Comment> findByPost(long postId) {
+        List<Comment> result = new ArrayList<>();
+        for (Document document : comments().find(Filters.eq("postId", postId)).sort(Sorts.ascending("createdAt"))) {
+            result.add(new Comment(
+                    document.getObjectId("_id").toHexString(),
+                    document.getLong("postId"),
+                    document.getLong("authorId"),
+                    document.getString("authorName"),
+                    document.getString("body"),
+                    document.getDate("createdAt").toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime()));
+        }
+        return result;
+    }
 
-    /** @return the identifier assigned by the store */
-    String insert(Comment comment);
+    public void insert(long postId, long authorId, String authorName, String body) {
+        comments().insertOne(new Document("postId", postId)
+                .append("authorId", authorId)
+                .append("authorName", authorName)
+                .append("body", body)
+                .append("createdAt", new Date()));
+    }
 
-    boolean updateBody(String commentId, String newBody);
+    public void updateBody(String commentId, String body) {
+        comments().updateOne(Filters.eq("_id", new ObjectId(commentId)), Updates.set("body", body));
+    }
 
-    boolean updateStatus(String commentId, CommentStatus status);
+    public void delete(String commentId) {
+        comments().deleteOne(Filters.eq("_id", new ObjectId(commentId)));
+    }
 
     /**
-     * Deletes the comment and all replies under it.
-     * PostgreSQL does this with ON DELETE CASCADE. MongoDB has no cascade,
-     * so that version deletes by path prefix.
-     *
-     * @return how many comments were removed
+     * Deletes all comments of a post. Needed when a post is deleted, because
+     * PostgreSQL's ON DELETE CASCADE cannot reach MongoDB.
      */
-    long deleteWithReplies(String commentId);
+    public void deleteByPost(long postId) {
+        comments().deleteMany(Filters.eq("postId", postId));
+    }
 
-    /** Removes every comment on a post. Used when a post is deleted. */
-    long deleteByPostId(long postId);
-
-    /**
-     * Updates the author name stored on the author's comments.
-     * Only MongoDB keeps a copy of the name. The JDBC version does nothing and returns 0.
-     */
-    long renameAuthor(long authorId, String newDisplayName);
+    public long count() {
+        return comments().countDocuments();
+    }
 }

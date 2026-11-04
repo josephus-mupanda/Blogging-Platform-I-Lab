@@ -1,657 +1,79 @@
-/* =====================================================================
-   Smart Blogging Platform — design system
-   Phase 3
-
-   One palette, one type scale, one spacing rhythm. Every colour and size
-   used anywhere in the UI is defined here as a looked-up colour or a named
-   style class, so a change lands everywhere at once and nothing drifts.
-
-   JavaFX CSS is not web CSS: there are no custom properties, but "looked-up
-   colours" declared on .root behave the same way for colour values, which is
-   what the -color-* definitions below are.
-   ===================================================================== */
+/* Colours and styles of the app. The class names are used in the .fxml files (styleClass="..."). */
 
 .root {
-
-    /* --- Surfaces ------------------------------------------------- */
-    -color-canvas:        #f4f5f7;   /* app background behind the cards */
-    -color-surface:       #ffffff;   /* cards, tables, inputs          */
-    -color-surface-alt:   #fafbfc;   /* table headers, subtle fills    */
-    -color-surface-hover: #f1f3f5;
-
-    /* --- Sidebar (dark) ------------------------------------------- */
-    -color-nav-bg:        #151922;
-    -color-nav-hover:     #1e2430;
-    -color-nav-active:    #272f3e;
-    -color-nav-text:      #9aa4b2;
-    -color-nav-text-on:   #ffffff;
-
-    /* --- Brand ----------------------------------------------------- */
-    -color-primary:       #4f46e5;
-    -color-primary-hover: #4338ca;
-    -color-primary-press: #3730a3;
-    -color-primary-soft:  #eef2ff;
-
-    /* --- Text ------------------------------------------------------ */
-    -color-text:          #111827;
-    -color-text-muted:    #6b7280;
-    -color-text-subtle:   #9ca3af;
-    -color-text-on-dark:  #ffffff;
-
-    /* --- Lines ----------------------------------------------------- */
-    -color-border:        #e4e7eb;
-    -color-border-strong: #d1d5db;
-    -color-focus:         #818cf8;
-
-    /* --- Semantic -------------------------------------------------- */
-    -color-success:       #047857;
-    -color-success-soft:  #d1fae5;
-    -color-warning:       #b45309;
-    -color-warning-soft:  #fef3c7;
-    -color-danger:        #b91c1c;
-    -color-danger-soft:   #fee2e2;
-    -color-info:          #1d4ed8;
-    -color-info-soft:     #dbeafe;
-    -color-neutral-soft:  #f1f3f5;
-
-    /* --- Type ------------------------------------------------------ */
-    -fx-font-family: "Segoe UI";
+    -fx-font-family: "Segoe UI", "Helvetica", sans-serif;
     -fx-font-size: 13px;
-    -fx-text-fill: -color-text;
-
-    -fx-background-color: -color-canvas;
-
-    /* Focus rings are drawn per-control below, so the platform default
-       dotted outline is removed everywhere. */
-    -fx-focus-color: transparent;
-    -fx-faint-focus-color: transparent;
+    -fx-text-fill: #1f2937;
 }
 
-/* =====================================================================
-   Typography scale
-   ===================================================================== */
-
-.text-display   { -fx-font-size: 26px; -fx-font-weight: bold;   -fx-text-fill: -color-text; }
-.text-title     { -fx-font-size: 19px; -fx-font-weight: bold;   -fx-text-fill: -color-text; }
-.text-subtitle  { -fx-font-size: 15px; -fx-font-weight: 600;    -fx-text-fill: -color-text; }
-.text-body      { -fx-font-size: 13px;                          -fx-text-fill: -color-text; }
-.text-muted     { -fx-font-size: 13px;                          -fx-text-fill: -color-text-muted; }
-.text-small     { -fx-font-size: 12px;                          -fx-text-fill: -color-text-muted; }
-.text-caption   { -fx-font-size: 11px;                          -fx-text-fill: -color-text-subtle; }
-
-/* Section eyebrow: small, spaced, upper-case. */
-.text-eyebrow {
-    -fx-font-size: 11px;
-    -fx-font-weight: bold;
-    -fx-text-fill: -color-text-subtle;
+/* The grey background behind the screens */
+.page {
+    -fx-background-color: #f3f4f6;
 }
 
-.text-metric {
-    -fx-font-size: 30px;
-    -fx-font-weight: bold;
-    -fx-text-fill: -color-text;
-}
-
-.text-mono {
-    /* "Monospaced" is a JavaFX logical family, guaranteed to resolve on every
-       platform. A web-style fallback list is not resolved the same way here
-       and fell through to a symbol face that rendered ASCII as nonsense. */
-    -fx-font-family: "Consolas";
-    -fx-font-size: 12px;
-}
-
-/* =====================================================================
-   Application shell
-   ===================================================================== */
-
-.sidebar {
-    -fx-background-color: -color-nav-bg;
-    -fx-pref-width: 244px;
-    -fx-min-width: 244px;
-    -fx-max-width: 244px;
-}
-
-.sidebar-brand {
-    -fx-padding: 22 20 18 20;
-}
-
-.sidebar-brand-mark {
-    -fx-background-color: -color-primary;
-    -fx-background-radius: 9;
-    -fx-min-width: 34; -fx-min-height: 34;
-    -fx-max-width: 34; -fx-max-height: 34;
-    -fx-alignment: center;
-}
-
-.sidebar-brand-mark .label {
-    -fx-text-fill: white;
-    -fx-font-size: 16px;
-    -fx-font-weight: bold;
-}
-
-.sidebar-brand-title {
-    -fx-text-fill: -color-nav-text-on;
-    -fx-font-size: 14.5px;
-    -fx-font-weight: bold;
-}
-
-.sidebar-brand-subtitle {
-    -fx-text-fill: -color-nav-text;
-    -fx-font-size: 11px;
-}
-
-.sidebar-section-label {
-    -fx-text-fill: #6b7584;
-    -fx-font-size: 10.5px;
-    -fx-font-weight: bold;
-    -fx-padding: 16 20 6 20;
-}
-
-.nav-item {
-    -fx-background-color: transparent;
-    -fx-background-radius: 7;
-    -fx-text-fill: -color-nav-text;
-    -fx-font-size: 13px;
-    -fx-padding: 9 12 9 12;
-    -fx-alignment: center-left;
-    -fx-graphic-text-gap: 11;
-    -fx-cursor: hand;
-}
-
-.nav-item:hover {
-    -fx-background-color: -color-nav-hover;
-    -fx-text-fill: -color-nav-text-on;
-}
-
-.nav-item:selected,
-.nav-item.active {
-    -fx-background-color: -color-nav-active;
-    -fx-text-fill: -color-nav-text-on;
-    -fx-font-weight: 600;
-}
-
-.nav-item .nav-icon {
-    -fx-fill: -color-nav-text;
-}
-
-.nav-item:hover .nav-icon,
-.nav-item.active .nav-icon {
-    -fx-fill: -color-nav-text-on;
-}
-
-.nav-item.active .nav-accent {
-    -fx-fill: -color-primary;
-}
-
-.sidebar-footer {
-    -fx-padding: 14 20 18 20;
-    -fx-border-color: #242b38 transparent transparent transparent;
-    -fx-border-width: 1 0 0 0;
-}
-
-/* --- Top bar ------------------------------------------------------- */
-
-.topbar {
-    -fx-background-color: -color-surface;
-    -fx-border-color: transparent transparent -color-border transparent;
-    -fx-border-width: 0 0 1 0;
-    -fx-padding: 0 26 0 26;
-    -fx-min-height: 62px;
-    -fx-pref-height: 62px;
-}
-
-.content-area {
-    -fx-background-color: -color-canvas;
-}
-
-.content-pad {
-    -fx-padding: 24 26 28 26;
-}
-
-/* =====================================================================
-   Cards
-   ===================================================================== */
-
+/* A white box with rounded corners */
 .card {
-    -fx-background-color: -color-surface;
+    -fx-background-color: white;
     -fx-background-radius: 10;
-    -fx-border-color: -color-border;
+    -fx-border-color: #e5e7eb;
     -fx-border-radius: 10;
-    -fx-border-width: 1;
-    -fx-padding: 18;
+    -fx-padding: 14;
 }
 
-.card-flush {
-    -fx-background-color: -color-surface;
-    -fx-background-radius: 10;
-    -fx-border-color: -color-border;
-    -fx-border-radius: 10;
-    -fx-border-width: 1;
-    -fx-padding: 0;
-}
+/* Text */
+.brand    { -fx-font-size: 18px; -fx-font-weight: bold; -fx-text-fill: #4f46e5; }
+.title    { -fx-font-size: 20px; -fx-font-weight: bold; }
+.subtitle { -fx-font-size: 15px; -fx-font-weight: bold; }
+.small    { -fx-font-size: 12px; -fx-text-fill: #6b7280; }
+.number   { -fx-font-size: 28px; -fx-font-weight: bold; }
+.field-label  { -fx-font-weight: bold; }
+.error-text   { -fx-text-fill: #b91c1c; }
+.success-text { -fx-text-fill: #047857; }
 
-.card-header {
-    -fx-padding: 15 18 13 18;
-    -fx-border-color: transparent transparent -color-border transparent;
-    -fx-border-width: 0 0 1 0;
-}
-
-.card-footer {
-    -fx-padding: 12 18 12 18;
-    -fx-border-color: -color-border transparent transparent transparent;
-    -fx-border-width: 1 0 0 0;
-    -fx-background-color: -color-surface-alt;
-    -fx-background-radius: 0 0 10 10;
-}
-
-/* Metric tile: the accent strip on the left is what keeps a row of
-   numbers from reading as an undifferentiated block. */
-.metric-tile {
-    -fx-background-color: -color-surface;
-    -fx-background-radius: 10;
-    -fx-border-color: -color-border;
-    -fx-border-radius: 10;
-    -fx-border-width: 1;
-    -fx-padding: 16 18 16 18;
-}
-
-.metric-accent {
-    -fx-min-width: 3; -fx-pref-width: 3; -fx-max-width: 3;
-    -fx-background-radius: 2;
-}
-
-/* =====================================================================
-   Buttons
-   ===================================================================== */
-
+/* Buttons */
 .button {
-    -fx-background-radius: 7;
-    -fx-border-radius: 7;
-    -fx-padding: 8 15 8 15;
-    -fx-font-size: 13px;
-    -fx-cursor: hand;
-    -fx-graphic-text-gap: 7;
-}
-
-.button:focused {
-    -fx-border-color: -color-focus;
-    -fx-border-width: 1;
-}
-
-.btn-primary {
-    -fx-background-color: -color-primary;
-    -fx-text-fill: white;
-    -fx-font-weight: 600;
-}
-.btn-primary:hover  { -fx-background-color: -color-primary-hover; }
-.btn-primary:pressed { -fx-background-color: -color-primary-press; }
-.btn-primary .nav-icon, .btn-primary .icon { -fx-fill: white; }
-
-.btn-secondary {
-    -fx-background-color: -color-surface;
-    -fx-text-fill: -color-text;
-    -fx-border-color: -color-border-strong;
-    -fx-border-width: 1;
-}
-.btn-secondary:hover { -fx-background-color: -color-surface-hover; }
-
-.btn-ghost {
-    -fx-background-color: transparent;
-    -fx-text-fill: -color-text-muted;
-    -fx-border-color: transparent;
-}
-.btn-ghost:hover {
-    -fx-background-color: -color-surface-hover;
-    -fx-text-fill: -color-text;
-}
-
-.btn-danger {
-    -fx-background-color: -color-surface;
-    -fx-text-fill: -color-danger;
-    -fx-border-color: #f3c3c3;
-    -fx-border-width: 1;
-}
-.btn-danger:hover { -fx-background-color: -color-danger-soft; }
-
-.btn-small {
-    -fx-padding: 5 10 5 10;
-    -fx-font-size: 12px;
-}
-
-.button:disabled { -fx-opacity: 0.45; }
-
-/* Nav items opt out of the generic focus ring. The .active state already
-   shows which screen is current, and a second indicator on top of it reads
-   as a conflicting selection. Scoped to .sidebar so it outranks
-   `.button:focused` above on specificity as well as on source order. */
-.sidebar .nav-item:focused {
-    -fx-border-color: transparent;
-    -fx-border-width: 0;
-}
-
-/* =====================================================================
-   Inputs
-   ===================================================================== */
-
-.text-field, .text-area, .combo-box, .choice-box, .spinner {
-    -fx-background-color: -color-surface;
-    -fx-background-radius: 7;
-    -fx-border-color: -color-border-strong;
-    -fx-border-radius: 7;
-    -fx-border-width: 1;
-    -fx-padding: 7 11 7 11;
-    -fx-font-size: 13px;
-    -fx-prompt-text-fill: -color-text-subtle;
-}
-
-.text-field:focused, .text-area:focused, .combo-box:focused {
-    -fx-border-color: -color-primary;
-}
-
-/* The focus ring doubles as the error state; red border + helper text. */
-.text-field.field-error, .text-area.field-error, .combo-box.field-error {
-    -fx-border-color: -color-danger;
-}
-
-.field-error-text {
-    -fx-text-fill: -color-danger;
-    -fx-font-size: 11.5px;
-}
-
-.form-success-text {
-    -fx-text-fill: -color-success;
-    -fx-font-size: 12px;
-}
-
-.field-label {
-    -fx-font-size: 12px;
-    -fx-font-weight: 600;
-    -fx-text-fill: -color-text;
-}
-
-.text-area { -fx-padding: 0; }
-.text-area .content {
-    -fx-background-color: -color-surface;
-    -fx-background-radius: 7;
-    -fx-padding: 9 11 9 11;
-}
-.text-area .scroll-pane,
-.text-area .viewport { -fx-background-color: transparent; }
-
-.search-field {
-    -fx-padding: 7 11 7 32;
-    -fx-pref-width: 300;
-}
-
-.combo-box .list-cell {
-    -fx-padding: 5 8 5 8;
-    -fx-background-color: transparent;
-    -fx-text-fill: -color-text;
-}
-.combo-box-popup .list-view {
-    -fx-background-color: -color-surface;
-    -fx-background-radius: 8;
-    -fx-border-color: -color-border;
-    -fx-border-radius: 8;
-    -fx-effect: dropshadow(gaussian, rgba(16, 24, 40, 0.12), 14, 0, 0, 4);
-}
-.combo-box-popup .list-view .list-cell:filled:hover {
-    -fx-background-color: -color-surface-hover;
-}
-.combo-box-popup .list-view .list-cell:filled:selected {
-    -fx-background-color: -color-primary-soft;
-    -fx-text-fill: -color-primary-press;
-}
-
-/* =====================================================================
-   Badges and chips
-   ===================================================================== */
-
-.badge {
-    -fx-background-radius: 20;
-    -fx-padding: 3 10 3 10;
-    -fx-font-size: 11px;
-    -fx-font-weight: bold;
-}
-
-.badge-success { -fx-background-color: -color-success-soft; -fx-text-fill: -color-success; }
-.badge-warning { -fx-background-color: -color-warning-soft; -fx-text-fill: -color-warning; }
-.badge-danger  { -fx-background-color: -color-danger-soft;  -fx-text-fill: -color-danger; }
-.badge-info    { -fx-background-color: -color-info-soft;    -fx-text-fill: -color-info; }
-.badge-neutral { -fx-background-color: -color-neutral-soft; -fx-text-fill: -color-text-muted; }
-
-.chip {
-    -fx-background-color: -color-primary-soft;
-    -fx-background-radius: 20;
-    -fx-text-fill: -color-primary-press;
-    -fx-padding: 4 10 4 10;
-    -fx-font-size: 11.5px;
-    -fx-font-weight: 600;
-}
-
-.chip-removable {
-    -fx-background-color: -color-primary-soft;
-    -fx-background-radius: 20;
-    -fx-padding: 3 5 3 11;
-}
-
-.chip-remove {
-    -fx-background-color: transparent;
-    -fx-text-fill: -color-primary-press;
-    -fx-padding: 0 4 0 4;
-    -fx-font-size: 13px;
+    -fx-background-radius: 6;
     -fx-cursor: hand;
 }
-.chip-remove:hover { -fx-text-fill: -color-danger; }
-
-/* Avatar circle with initials; cheaper and more reliable than images. */
-.avatar {
-    -fx-background-color: -color-primary-soft;
-    -fx-background-radius: 50;
-    -fx-min-width: 32; -fx-min-height: 32;
-    -fx-max-width: 32; -fx-max-height: 32;
-    -fx-alignment: center;
-}
-.avatar .label {
-    -fx-text-fill: -color-primary-press;
-    -fx-font-size: 11.5px;
-    -fx-font-weight: bold;
-}
-.avatar-sm {
-    -fx-min-width: 26; -fx-min-height: 26;
-    -fx-max-width: 26; -fx-max-height: 26;
-}
-.avatar-sm .label { -fx-font-size: 10px; }
-
-/* =====================================================================
-   Table
-   ===================================================================== */
-
-.table-view {
-    -fx-background-color: transparent;
-    -fx-border-color: transparent;
-    -fx-padding: 0;
-}
-
-.table-view .column-header-background {
-    -fx-background-color: -color-surface-alt;
-    -fx-background-radius: 10 10 0 0;
-}
-
-.table-view .column-header,
-.table-view .filler {
-    -fx-background-color: transparent;
-    -fx-border-color: transparent transparent -color-border transparent;
-    -fx-border-width: 0 0 1 0;
-    -fx-size: 40px;
-}
-
-.table-view .column-header .label {
-    -fx-text-fill: -color-text-muted;
-    -fx-font-size: 11.5px;
-    -fx-font-weight: bold;
-    -fx-alignment: center-left;
-    -fx-padding: 0 0 0 12;
-}
-
-.table-view .table-row-cell {
-    -fx-background-color: -color-surface;
-    -fx-border-color: transparent transparent -color-border transparent;
-    -fx-border-width: 0 0 1 0;
-    -fx-cell-size: 52px;
-}
-
-.table-view .table-row-cell:odd { -fx-background-color: -color-surface; }
-.table-view .table-row-cell:hover { -fx-background-color: -color-surface-hover; }
-
-.table-view .table-row-cell:selected {
-    -fx-background-color: -color-primary-soft;
-}
-.table-view .table-row-cell:selected .text { -fx-fill: -color-text; }
-.table-view .table-row-cell:selected .label { -fx-text-fill: -color-text; }
-
-.table-view .table-cell {
-    -fx-border-color: transparent;
-    -fx-padding: 0 12 0 12;
-    -fx-alignment: center-left;
-    -fx-text-fill: -color-text;
-}
-
-.table-view .table-row-cell:empty { -fx-background-color: -color-surface; }
-.table-view .table-row-cell:empty .table-cell { -fx-border-color: transparent; }
-
-.table-view .placeholder .label {
-    -fx-text-fill: -color-text-subtle;
-    -fx-font-size: 13px;
-}
-
-/* =====================================================================
-   Scrollbars — thin, neutral, no arrow buttons
-   ===================================================================== */
-
-.scroll-pane { -fx-background-color: transparent; }
-.scroll-pane > .viewport { -fx-background-color: transparent; }
-
-.scroll-bar:vertical, .scroll-bar:horizontal {
-    -fx-background-color: transparent;
-    -fx-padding: 2;
-}
-
-.scroll-bar .thumb {
-    -fx-background-color: #c8cdd4;
-    -fx-background-radius: 6;
-}
-.scroll-bar .thumb:hover { -fx-background-color: #aab1bb; }
-
-.scroll-bar:vertical   { -fx-pref-width: 10; }
-.scroll-bar:horizontal { -fx-pref-height: 10; }
-
-.scroll-bar .increment-button,
-.scroll-bar .decrement-button {
-    -fx-background-color: transparent;
-    -fx-padding: 0;
-    -fx-shape: " ";
-}
-
-/* =====================================================================
-   Comment thread
-   ===================================================================== */
-
-.comment {
-    -fx-background-color: -color-surface;
-    -fx-background-radius: 9;
-    -fx-border-color: -color-border;
-    -fx-border-radius: 9;
-    -fx-border-width: 1;
-    -fx-padding: 12 14 12 14;
-}
-
-/* A reply is visually subordinate: softer fill plus a left rule that makes
-   the nesting legible without relying on indentation alone. */
-.comment-reply {
-    -fx-background-color: -color-surface-alt;
-    -fx-border-color: -color-border -color-border -color-border -color-border-strong;
-    -fx-border-width: 1 1 1 2;
-}
-
-.comment-hidden {
-    -fx-opacity: 0.6;
-}
-
-.comment-body {
-    -fx-font-size: 13px;
-    -fx-text-fill: -color-text;
-}
-
-/* =====================================================================
-   Misc
-   ===================================================================== */
-
-.separator *.line {
-    -fx-border-color: -color-border;
-    -fx-border-width: 1 0 0 0;
-}
-
-.banner-error {
-    -fx-background-color: -color-danger-soft;
-    -fx-background-radius: 9;
-    -fx-border-color: #f3c3c3;
-    -fx-border-radius: 9;
-    -fx-border-width: 1;
-    -fx-padding: 12 16 12 16;
-}
-
-.banner-error .label { -fx-text-fill: #7f1d1d; }
-
-.banner-info {
-    -fx-background-color: -color-info-soft;
-    -fx-background-radius: 9;
-    -fx-border-color: #bfdbfe;
-    -fx-border-radius: 9;
-    -fx-border-width: 1;
-    -fx-padding: 12 16 12 16;
-}
-
-.empty-state { -fx-padding: 44 20 48 20; -fx-alignment: center; }
-.empty-state .label { -fx-text-fill: -color-text-subtle; }
-
-.progress-indicator { -fx-progress-color: -color-primary; }
-
-.rating-bar-track {
-    -fx-background-color: -color-neutral-soft;
-    -fx-background-radius: 4;
-    -fx-min-height: 7; -fx-pref-height: 7; -fx-max-height: 7;
-}
-.review-stars {
-    -fx-text-fill: -color-warning;
-    -fx-font-size: 13px;
-}
-
-.rating-bar-fill {
-    -fx-background-color: -color-primary;
-    -fx-background-radius: 4;
-    -fx-min-height: 7; -fx-pref-height: 7; -fx-max-height: 7;
-}
-
-.tooltip {
-    -fx-background-color: #1f2937;
-    -fx-background-radius: 6;
+.primary {
+    -fx-background-color: #4f46e5;
     -fx-text-fill: white;
-    -fx-font-size: 12px;
-    -fx-padding: 6 9 6 9;
+}
+.primary:hover {
+    -fx-background-color: #4338ca;
+}
+.danger {
+    -fx-text-fill: #b91c1c;
+}
+.link {
+    -fx-background-color: transparent;
+    -fx-text-fill: #4f46e5;
 }
 
-.dialog-pane {
-    -fx-background-color: -color-surface;
-    -fx-font-size: 13px;
+/* The menu on the left */
+.sidebar {
+    -fx-background-color: #1e1b4b;
+    -fx-pref-width: 200;
 }
-.dialog-pane .header-panel {
-    -fx-background-color: -color-surface-alt;
-    -fx-border-color: transparent transparent -color-border transparent;
-    -fx-border-width: 0 0 1 0;
-}
-.dialog-pane .header-panel .label {
-    -fx-font-size: 15px;
+.sidebar-brand {
+    -fx-font-size: 20px;
     -fx-font-weight: bold;
+    -fx-text-fill: white;
+    -fx-padding: 0 0 16 6;
 }
-.dialog-pane .button-bar .button { -fx-background-radius: 7; }
+.nav {
+    -fx-background-color: transparent;
+    -fx-text-fill: #e0e7ff;
+    -fx-alignment: center-left;
+    -fx-font-size: 14px;
+}
+.nav:hover {
+    -fx-background-color: #312e81;
+}
+
+/* The bar at the top of the main window */
+.topbar {
+    -fx-background-color: white;
+    -fx-border-color: transparent transparent #e5e7eb transparent;
+    -fx-padding: 12 24 12 24;
+}

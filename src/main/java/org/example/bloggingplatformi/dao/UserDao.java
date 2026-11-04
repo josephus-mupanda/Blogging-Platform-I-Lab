@@ -1,40 +1,114 @@
 package org.example.bloggingplatformi.dao;
 
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 
+import org.example.bloggingplatformi.db.Database;
+import org.example.bloggingplatformi.exception.DatabaseException;
+import org.example.bloggingplatformi.model.Role;
 import org.example.bloggingplatformi.model.User;
 
 /**
- * Reads and writes rows in the users table.
- * Lookups return Optional because "no such user" is a normal result, not an error.
+ * Reads and writes the users table with JDBC.
+ * Every query uses a PreparedStatement with ? placeholders, so a value typed by the
+ * user can never change the SQL (no SQL injection).
  */
-public interface UserDao {
+public class UserDao {
 
-    Optional<User> findById(long userId);
+    /** Returns the user, or null if nobody has this username. */
+    public User findByUsername(String username) {
+        String sql = "SELECT * FROM users WHERE username = ?";
+        try (PreparedStatement statement = Database.connection().prepareStatement(sql)) {
+            statement.setString(1, username);
+            ResultSet rows = statement.executeQuery();
+            return rows.next() ? toUser(rows) : null;
+        } catch (SQLException e) {
+            throw new DatabaseException("Could not load the user", e);
+        }
+    }
 
-    Optional<User> findByUsername(String username);
+    public List<User> findAll() {
+        String sql = "SELECT * FROM users ORDER BY username";
+        try (PreparedStatement statement = Database.connection().prepareStatement(sql)) {
+            ResultSet rows = statement.executeQuery();
+            List<User> users = new ArrayList<>();
+            while (rows.next()) {
+                users.add(toUser(rows));
+            }
+            return users;
+        } catch (SQLException e) {
+            throw new DatabaseException("Could not load the users", e);
+        }
+    }
 
-    List<User> findAll(int limit, int offset);
+    /** The users who can write posts, for the "author" filter of the post list. */
+    public List<User> findAuthors() {
+        String sql = "SELECT * FROM users WHERE role IN ('ADMIN', 'AUTHOR') ORDER BY display_name";
+        try (PreparedStatement statement = Database.connection().prepareStatement(sql)) {
+            ResultSet rows = statement.executeQuery();
+            List<User> users = new ArrayList<>();
+            while (rows.next()) {
+                users.add(toUser(rows));
+            }
+            return users;
+        } catch (SQLException e) {
+            throw new DatabaseException("Could not load the authors", e);
+        }
+    }
 
-    /** Users who have written at least one post. Used by the author filter. */
-    List<User> findAuthorsWithPosts();
+    public boolean usernameExists(String username) {
+        return exists("SELECT 1 FROM users WHERE username = ?", username);
+    }
 
-    boolean existsByUsername(String username);
+    public boolean emailExists(String email) {
+        return exists("SELECT 1 FROM users WHERE email = ?", email);
+    }
 
-    boolean existsByEmail(String email);
+    private boolean exists(String sql, String value) {
+        try (PreparedStatement statement = Database.connection().prepareStatement(sql)) {
+            statement.setString(1, value);
+            return statement.executeQuery().next();
+        } catch (SQLException e) {
+            throw new DatabaseException("Could not check the user", e);
+        }
+    }
 
-    /** @return the generated {@code user_id} */
-    long insert(User user);
+    public void insert(String username, String email, String passwordHash, String displayName, Role role) {
+        String sql = "INSERT INTO users (username, email, password_hash, display_name, role) VALUES (?, ?, ?, ?, ?)";
+        try (PreparedStatement statement = Database.connection().prepareStatement(sql)) {
+            statement.setString(1, username);
+            statement.setString(2, email);
+            statement.setString(3, passwordHash);
+            statement.setString(4, displayName);
+            statement.setString(5, role.name());
+            statement.executeUpdate();
+        } catch (SQLException e) {
+            throw new DatabaseException("Could not create the account", e);
+        }
+    }
 
-    /** @return true if a row was changed */
-    boolean update(User user);
+    public int count() {
+        try (PreparedStatement statement = Database.connection().prepareStatement("SELECT COUNT(*) FROM users")) {
+            ResultSet rows = statement.executeQuery();
+            rows.next();
+            return rows.getInt(1);
+        } catch (SQLException e) {
+            throw new DatabaseException("Could not count the users", e);
+        }
+    }
 
-    /**
-     * Deletes the user. Their posts are deleted too (cascade).
-     * Their comments stay, with the author set to null.
-     */
-    boolean deleteById(long userId);
-
-    long count();
+    /** Turns the current row of the result into a User object. */
+    private User toUser(ResultSet row) throws SQLException {
+        return new User(
+                row.getLong("user_id"),
+                row.getString("username"),
+                row.getString("email"),
+                row.getString("password_hash"),
+                row.getString("display_name"),
+                Role.valueOf(row.getString("role")),
+                row.getTimestamp("created_at").toLocalDateTime());
+    }
 }

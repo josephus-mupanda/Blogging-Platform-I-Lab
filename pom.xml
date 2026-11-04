@@ -16,79 +16,47 @@
         <junit.version>5.10.2</junit.version>
         <postgresql.version>42.7.4</postgresql.version>
         <mongodb.version>5.2.1</mongodb.version>
-        <hikari.version>5.1.0</hikari.version>
         <slf4j.version>2.0.16</slf4j.version>
-
-        <!-- Benchmark suite: mvn javafx:run@bench [-Dbench.mode=load-mongo] -->
-        <bench.mode>run</bench.mode>
-        <bench.postgres.url>jdbc:postgresql://localhost:5433/blogging_platform_bench</bench.postgres.url>
-        <bench.mongo.database>blogging_platform_bench</bench.mongo.database>
     </properties>
 
     <dependencies>
-        <!-- UI -->
+        <!-- JavaFX: the window, and FXML for the screen layouts -->
         <dependency>
             <groupId>org.openjfx</groupId>
             <artifactId>javafx-controls</artifactId>
             <version>${javafx.version}</version>
         </dependency>
-        <!-- FXML: the screen layouts are .fxml files in src/main/resources/.../view/ -->
         <dependency>
             <groupId>org.openjfx</groupId>
             <artifactId>javafx-fxml</artifactId>
             <version>${javafx.version}</version>
         </dependency>
-        <!-- Relational store: PostgreSQL over JDBC -->
+
+        <!-- PostgreSQL JDBC driver: users, posts, tags -->
         <dependency>
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
             <version>${postgresql.version}</version>
         </dependency>
 
-        <!-- Connection pooling. Opening a connection per query dominates
-             any query-level optimisation we could make in Phase 4. -->
-        <dependency>
-            <groupId>com.zaxxer</groupId>
-            <artifactId>HikariCP</artifactId>
-            <version>${hikari.version}</version>
-        </dependency>
-
-        <!-- Document store: MongoDB sync driver -->
+        <!-- MongoDB driver: comments, reviews -->
         <dependency>
             <groupId>org.mongodb</groupId>
             <artifactId>mongodb-driver-sync</artifactId>
             <version>${mongodb.version}</version>
         </dependency>
 
-        <!-- Logging. HikariCP and the Mongo driver both bind to SLF4J;
-             without a binding they warn on every startup. -->
-        <dependency>
-            <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-api</artifactId>
-            <version>${slf4j.version}</version>
-        </dependency>
+        <!-- The MongoDB driver writes its log messages through SLF4J -->
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-simple</artifactId>
             <version>${slf4j.version}</version>
         </dependency>
 
-        <!-- Testing -->
+        <!-- Tests -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>
-            <artifactId>junit-jupiter-api</artifactId>
-            <version>${junit.version}</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.junit.jupiter</groupId>
-            <artifactId>junit-jupiter-params</artifactId>
-            <version>${junit.version}</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.junit.jupiter</groupId>
-            <artifactId>junit-jupiter-engine</artifactId>
+            <artifactId>junit-jupiter</artifactId>
             <version>${junit.version}</version>
             <scope>test</scope>
         </dependency>
@@ -105,23 +73,11 @@
                 </configuration>
             </plugin>
 
-            <!-- Without Surefire declared explicitly, the JUnit 5 engine is
-                 not picked up reliably and `mvn test` silently runs nothing. -->
+            <!-- Runs the JUnit 5 tests with: mvn test -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>3.2.5</version>
-                <configuration>
-                    <includes>
-                        <include>**/*Test.java</include>
-                        <!-- The *IT classes need a running PostgreSQL or
-                             MongoDB. They skip themselves through JUnit
-                             assumptions when one is not reachable, so running
-                             them here is safe and means `mvn test` reports
-                             honestly on what was and was not verified. -->
-                        <include>**/*IT.java</include>
-                    </includes>
-                </configuration>
             </plugin>
 
             <plugin>
@@ -129,31 +85,20 @@
                 <artifactId>javafx-maven-plugin</artifactId>
                 <version>0.0.8</version>
                 <executions>
+                    <!-- Start the app: mvn javafx:run -->
                     <execution>
-                        <!-- Default configuration for running with: mvn clean javafx:run -->
                         <id>default-cli</id>
                         <configuration>
                             <mainClass>org.example.bloggingplatformi/org.example.bloggingplatformi.BloggingPlatformApplication</mainClass>
-                            <launcher>app</launcher>
-                            <jlinkZipName>app</jlinkZipName>
-                            <jlinkImageName>app</jlinkImageName>
-                            <noManPages>true</noManPages>
-                            <stripDebug>true</stripDebug>
-                            <noHeaderFiles>true</noHeaderFiles>
                         </configuration>
                     </execution>
+                    <!-- Run the benchmark on the big benchmark database: mvn javafx:run@bench -->
                     <execution>
-                        <!-- Phase 4 benchmark suite, against the separate
-                             benchmark database so the demo data is never
-                             touched. Writes docs/benchmarks/. -->
                         <id>bench</id>
                         <configuration>
-                            <mainClass>org.example.bloggingplatformi/org.example.bloggingplatformi.benchmark.PerformanceSuite</mainClass>
+                            <mainClass>org.example.bloggingplatformi/org.example.bloggingplatformi.benchmark.Benchmark</mainClass>
                             <options>
-                                <option>-Xmx3g</option>
-                                <option>-Dbench.mode=${bench.mode}</option>
-                                <option>-Ddb.postgres.url=${bench.postgres.url}</option>
-                                <option>-Ddb.mongo.database=${bench.mongo.database}</option>
+                                <option>-Ddb.postgres.url=jdbc:postgresql://localhost:5433/blogging_platform_bench</option>
                             </options>
                         </configuration>
                     </execution>

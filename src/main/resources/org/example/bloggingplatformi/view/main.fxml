@@ -1,10 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<!--
-  The main window, shown after sign in:
-  a sidebar menu on the left, a top bar, and the content area where the screens are swapped.
-  Controller: org.example.bloggingplatformi.ui.AppShell
--->
+<!-- The main window after sign in: a menu on the left, a top bar, and the current screen in the middle. -->
 
 <?import javafx.geometry.Insets?>
 <?import javafx.scene.control.Button?>
@@ -16,77 +12,32 @@
 <?import javafx.scene.layout.VBox?>
 
 <BorderPane xmlns="http://javafx.com/javafx" xmlns:fx="http://javafx.com/fxml"
-            fx:controller="org.example.bloggingplatformi.ui.AppShell">
+            fx:controller="org.example.bloggingplatformi.controller.MainController">
 
-    <!-- ===================== Sidebar ===================== -->
+    <!-- Menu -->
     <left>
-        <VBox styleClass="sidebar">
-            <HBox spacing="11" alignment="CENTER_LEFT" styleClass="sidebar-brand">
-                <StackPane styleClass="sidebar-brand-mark"><Label text="B"/></StackPane>
-                <VBox>
-                    <Label text="Blogfold" styleClass="sidebar-brand-title"/>
-                    <Label text="Content workspace" styleClass="sidebar-brand-subtitle"/>
-                </VBox>
-            </HBox>
-
-            <VBox spacing="3">
-                <padding><Insets right="12" left="12"/></padding>
-
-                <Label text="WORKSPACE" styleClass="sidebar-section-label"/>
-                <Button fx:id="dashboardNav" text="Dashboard" styleClass="nav-item"
-                        maxWidth="Infinity" alignment="CENTER_LEFT" onAction="#openDashboard"/>
-                <Button fx:id="postsNav" text="Posts" styleClass="nav-item"
-                        maxWidth="Infinity" alignment="CENTER_LEFT" onAction="#openPosts"/>
-
-                <!-- Admin only: the controller hides this whole section for other users. -->
-                <VBox fx:id="manageSection" spacing="3">
-                    <Label text="MANAGE" styleClass="sidebar-section-label"/>
-                    <Button fx:id="moderationNav" text="Moderation" styleClass="nav-item"
-                            maxWidth="Infinity" alignment="CENTER_LEFT" onAction="#openModeration"/>
-                    <Button fx:id="authorsNav" text="Authors" styleClass="nav-item"
-                            maxWidth="Infinity" alignment="CENTER_LEFT" onAction="#openAuthors"/>
-                    <Button fx:id="tagsNav" text="Tags" styleClass="nav-item"
-                            maxWidth="Infinity" alignment="CENTER_LEFT" onAction="#openTags"/>
-                </VBox>
-            </VBox>
+        <VBox spacing="6" styleClass="sidebar">
+            <padding><Insets top="20" right="14" bottom="20" left="14"/></padding>
+            <Label text="Blogfold" styleClass="sidebar-brand"/>
+            <Button text="Dashboard" styleClass="nav" maxWidth="Infinity" onAction="#showDashboard"/>
+            <Button text="Posts" styleClass="nav" maxWidth="Infinity" onAction="#showPosts"/>
+            <!-- Admin only: hidden for bloggers and readers. -->
+            <Button fx:id="tagsButton" text="Tags" styleClass="nav" maxWidth="Infinity" onAction="#showTags"/>
+            <Button fx:id="usersButton" text="Users" styleClass="nav" maxWidth="Infinity" onAction="#showUsers"/>
         </VBox>
     </left>
 
-    <!-- ===================== Main area ===================== -->
     <center>
-        <VBox styleClass="content-area">
-
-            <!-- Top bar: back button, screen title, screen buttons, signed-in user. -->
+        <VBox>
+            <!-- Top bar: screen title, who is signed in, Sign out -->
             <HBox spacing="12" alignment="CENTER_LEFT" styleClass="topbar">
-                <Button fx:id="backButton" styleClass="btn-ghost, btn-small"
-                        visible="false" managed="false" onAction="#back"/>
-                <VBox spacing="1" alignment="CENTER_LEFT">
-                    <Label fx:id="headingLabel" styleClass="text-title"/>
-                    <Label fx:id="subheadingLabel" styleClass="text-small"
-                           visible="false" managed="false"/>
-                </VBox>
+                <Label fx:id="screenTitle" styleClass="title"/>
                 <Region HBox.hgrow="ALWAYS"/>
-                <!-- Each screen puts its own buttons here (for example "New post"). -->
-                <HBox fx:id="actionBar" spacing="9" alignment="CENTER_RIGHT"/>
-
-                <HBox spacing="9" alignment="CENTER_RIGHT">
-                    <padding><Insets left="10"/></padding>
-                    <StackPane fx:id="avatarSlot"/>
-                    <VBox alignment="CENTER_LEFT">
-                        <Label fx:id="userNameLabel" styleClass="text-body"/>
-                        <Label fx:id="userRoleLabel" styleClass="text-caption"/>
-                    </VBox>
-                    <Button text="Sign out" styleClass="btn-secondary, btn-small" onAction="#signOut"/>
-                </HBox>
+                <Label fx:id="userLabel"/>
+                <Button text="Sign out" onAction="#signOut"/>
             </HBox>
-
-            <!-- A message such as "Cannot reach MongoDB". Hidden when empty. -->
-            <VBox fx:id="bannerSlot" visible="false" managed="false" minHeight="-Infinity">
-                <padding><Insets top="16" right="26" left="26"/></padding>
-            </VBox>
-
-            <!-- The current screen is placed here. -->
-            <StackPane fx:id="contentHost" VBox.vgrow="ALWAYS"/>
+            <!-- The current screen is put here by the controller. -->
+            <StackPane fx:id="content" VBox.vgrow="ALWAYS" styleClass="page"/>
         </VBox>
     </center>
 </BorderPane>

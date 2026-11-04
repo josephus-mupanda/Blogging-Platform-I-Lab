@@ -3,77 +3,48 @@ package org.example.bloggingplatformi.service;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
-import org.example.bloggingplatformi.algo.Sorting;
-import org.example.bloggingplatformi.dao.DaoFactory;
 import org.example.bloggingplatformi.dao.TagDao;
 import org.example.bloggingplatformi.exception.ValidationException;
 import org.example.bloggingplatformi.model.Tag;
+import org.example.bloggingplatformi.util.Sorting;
 
-/** Business rules for the tag vocabulary. */
+/** Business rules for tags. Uses our own merge sort and binary search. */
 public class TagService {
 
-    private static final int MAX_NAME = 50;
-    private static final int AUTOCOMPLETE_LIMIT = 10;
+    private static final Comparator<Tag> BY_NAME = Comparator.comparing(Tag::name);
 
-    private final TagDao tagDao;
+    private final TagDao tagDao = new TagDao();
 
-    public TagService() {
-        this(DaoFactory.tags());
-    }
-
-    public TagService(TagDao tagDao) {
-        this.tagDao = tagDao;
-    }
-
-    /**
-     * All tags, sorted by name with our own merge sort (Sorting.mergeSort)
-     * instead of an SQL ORDER BY.
-     */
+    /** All tags, sorted by name with our merge sort. */
     public List<Tag> findAll() {
-        return Sorting.mergeSort(tagDao.findAll(), Comparator.comparing(Tag::name));
+        return Sorting.mergeSort(tagDao.findAll(), BY_NAME);
     }
 
-    public Optional<Tag> findByName(String name) {
-        return tagDao.findByName(name);
-    }
-
-    public List<Tag> findForPost(long postId) {
-        return tagDao.findByPostId(postId);
-    }
-
-    /** Maps each tag name to its number of posts, most used first. */
-    public Map<String, Long> usageCounts(int limit) {
-        return tagDao.usageCounts(limit);
-    }
-
-    public long count() {
-        return tagDao.count();
-    }
-
-    /**
-     * Returns the id of the tag with this name, creating the tag if it is new.
-     * Names are lower-cased, so "Java" and " JAVA " end up as the same tag.
-     */
-    public int findOrCreate(String name) {
-        validateName(name);
-        return tagDao.findOrCreate(name);
-    }
-
-    public boolean delete(int tagId) {
-        // The database removes the tag's post_tags rows. The posts stay.
-        return tagDao.deleteById(tagId);
-    }
-
-    private void validateName(String name) {
-        ValidationException.Collector errors = new ValidationException.Collector();
+    /** Tag names are saved in lower case, so "Java" and "java" are the same tag. */
+    public void create(String name) {
         if (name == null || name.isBlank()) {
-            errors.reject("name", "A tag name is required.");
-        } else {
-            errors.rejectIf(name.strip().length() > MAX_NAME,
-                    "name", "Tag names must be at most " + MAX_NAME + " characters.");
+            throw new ValidationException("Please type a tag name.");
         }
-        errors.throwIfInvalid();
+        String clean = name.strip().toLowerCase();
+
+        // The list is sorted, so binary search can tell quickly if the name is already used.
+        if (Sorting.binarySearch(findAll(), new Tag(0, clean), BY_NAME) >= 0) {
+            throw new ValidationException("The tag \"" + clean + "\" already exists.");
+        }
+        tagDao.findOrCreate(clean);
+    }
+
+    public void delete(long tagId) {
+        tagDao.delete(tagId);
+    }
+
+    /** Tag name -> number of posts that use it, most used first. */
+    public Map<String, Integer> usage() {
+        return tagDao.usage();
+    }
+
+    public int count() {
+        return tagDao.findAll().size();
     }
 }

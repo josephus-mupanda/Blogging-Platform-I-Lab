@@ -1,9 +1,0 @@
--- title_exact_case_insensitive (no index)
--- SELECT post_id FROM posts WHERE LOWER(title) = LOWER(?)
--- parameters: SCALING MATERIALIZED PATHS, PART 7
-Seq Scan on posts  (cost=0.00..14798.00 rows=500 width=8) (actual time=156.345..253.468 rows=2.00 loops=1)
-  Filter: (lower((title)::text) = 'scaling materialized paths, part 7'::text)
-  Rows Removed by Filter: 99998
-  Buffers: shared hit=7679 read=5619
-Planning Time: 1.446 ms
-Execution Time: 253.494 ms

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- Users (admin only): every registered account. -->
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.TableColumn?>
+<?import javafx.scene.control.TableView?>
+<?import javafx.scene.layout.VBox?>
+
+<VBox xmlns="http://javafx.com/javafx" xmlns:fx="http://javafx.com/fxml"
+      fx:controller="org.example.bloggingplatformi.controller.UsersController">
+    <padding><Insets top="24" right="24" bottom="24" left="24"/></padding>
+
+    <TableView fx:id="table" VBox.vgrow="ALWAYS">
+        <!-- The columns share the whole width of the table. -->
+        <columnResizePolicy><TableView fx:constant="CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN"/></columnResizePolicy>
+        <columns>
+            <TableColumn fx:id="usernameColumn" text="Username" prefWidth="160"/>
+            <TableColumn fx:id="nameColumn" text="Name" prefWidth="200"/>
+            <TableColumn fx:id="emailColumn" text="Email" prefWidth="260"/>
+            <TableColumn fx:id="roleColumn" text="Role" prefWidth="110"/>
+            <TableColumn fx:id="createdColumn" text="Registered on" prefWidth="180"/>
+        </columns>
+    </TableView>
+</VBox>

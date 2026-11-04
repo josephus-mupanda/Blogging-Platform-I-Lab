@@ -1,40 +1,24 @@
 package org.example.bloggingplatformi.util;
 
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Tests for Passwords, which hashes and checks the passwords used to sign in. */
+import org.junit.jupiter.api.Test;
+
+/** Tests for the password hashing. */
 class PasswordsTest {
 
     @Test
-    @DisplayName("the right password matches its hash, a wrong one does not")
-    void matchesOnlyTheRightPassword() {
-        String stored = Passwords.hash("admin123");
-
-        assertTrue(Passwords.matches("admin123", stored));
-        assertFalse(Passwords.matches("admin124", stored));
-        assertFalse(Passwords.matches("", stored));
+    void theHashIsTheSha256OfThePassword() {
+        // The same value as the admin password in db/postgres/seed.sql.
+        assertEquals("bcb15f821479b4d5772bd0ca866c00ad5f926e3580720659cc80d39c9d09802a", Passwords.hash("111111"));
     }
 
     @Test
-    @DisplayName("the plain password is not stored, and the salt makes each hash different")
-    void hashIsSaltedAndHidesThePassword() {
-        String first = Passwords.hash("secret99");
-        String second = Passwords.hash("secret99");
-
-        assertFalse(first.contains("secret99"));
-        assertNotEquals(first, second);
-    }
-
-    @Test
-    @DisplayName("a broken stored value never matches")
-    void brokenHashNeverMatches() {
-        assertFalse(Passwords.matches("admin123", null));
-        assertFalse(Passwords.matches("admin123", "no-colon-here"));
-        assertFalse(Passwords.matches("admin123", "!!!:???"));
+    void onlyTheRightPasswordMatches() {
+        String stored = Passwords.hash("secret1");
+        assertTrue(Passwords.matches("secret1", stored));
+        assertFalse(Passwords.matches("secret2", stored));
     }
 }

@@ -1,7 +1,0 @@
-Run:        2026-11-02T07:21:19.475841
-Java:       JVM 21.0.2 (Java HotSpot(TM) 64-Bit Server VM), OS Windows 11 10.0, 4 cores, heap max 3072 MB
-PostgreSQL: PostgreSQL 18.3 on x86_64-windows, compiled by msvc-19.44.35223, 64-bit
-            database blogging_platform_bench, shared_buffers 128MB, work_mem 4MB
-MongoDB:    9.0.4, database blogging_platform_bench
-Data:       users 5000, posts 100000, post_tags 248728, comments 630000, reviews 259930 | Mongo comments 630000, reviews 259930
-Method:     warm buffer cache, JIT warmed, single client, localhost; median of N timed iterations after a warm-up (see each CSV)

@@ -1,110 +1,62 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<!--
-  Post detail: the article, its discussion (threaded comments), the rating summary and the reviews.
-  The post comes from PostgreSQL; comments and reviews come from MongoDB (or PostgreSQL,
-  depending on app.comments.store). The lists are filled by the controller.
-  Controller: org.example.bloggingplatformi.controller.PostDetailController
--->
+<!-- One post: the post (PostgreSQL) on top, its comments (MongoDB) on the left, its reviews (MongoDB) on the right. -->
 
-<?import java.lang.Integer?>
-<?import javafx.collections.FXCollections?>
 <?import javafx.geometry.Insets?>
 <?import javafx.scene.control.Button?>
 <?import javafx.scene.control.ComboBox?>
 <?import javafx.scene.control.Label?>
-<?import javafx.scene.control.ScrollPane?>
-<?import javafx.scene.control.TextArea?>
+<?import javafx.scene.control.ListView?>
 <?import javafx.scene.control.TextField?>
 <?import javafx.scene.layout.HBox?>
-<?import javafx.scene.layout.Region?>
 <?import javafx.scene.layout.VBox?>
 
-<ScrollPane xmlns="http://javafx.com/javafx" xmlns:fx="http://javafx.com/fxml"
-            fx:controller="org.example.bloggingplatformi.controller.PostDetailController"
-            fitToWidth="true">
-    <VBox spacing="16">
-        <padding><Insets top="24" right="26" bottom="28" left="26"/></padding>
+<VBox xmlns="http://javafx.com/javafx" xmlns:fx="http://javafx.com/fxml"
+      fx:controller="org.example.bloggingplatformi.controller.PostDetailController"
+      spacing="14">
+    <padding><Insets top="24" right="24" bottom="24" left="24"/></padding>
 
-        <HBox spacing="16">
-
-            <!-- ===================== Left: article and discussion ===================== -->
-            <VBox spacing="16" HBox.hgrow="ALWAYS">
-
-                <!-- Title, status, date, tags and body: filled when the post has loaded. -->
-                <VBox fx:id="articleCard" spacing="14" styleClass="card"/>
-
-                <VBox styleClass="card-flush">
-                    <VBox spacing="3" styleClass="card-header">
-                        <Label text="Discussion" styleClass="text-subtitle"/>
-                        <Label fx:id="commentStoreLabel" styleClass="text-caption"/>
-                    </VBox>
-                    <VBox spacing="14">
-                        <padding><Insets top="14" right="18" bottom="16" left="18"/></padding>
-                        <!-- The comment thread, filled by the controller. -->
-                        <VBox fx:id="commentList" spacing="9"/>
-                        <VBox spacing="7">
-                            <TextArea fx:id="commentInput" promptText="Add a comment…"
-                                      wrapText="true" prefRowCount="3"/>
-                            <HBox spacing="9" alignment="CENTER_LEFT">
-                                <Region HBox.hgrow="ALWAYS"/>
-                                <Button fx:id="commentButton" text="Comment" styleClass="btn-primary, btn-small"
-                                        onAction="#postComment"/>
-                            </HBox>
-                        </VBox>
-                    </VBox>
-                </VBox>
-            </VBox>
-
-            <!-- ===================== Right: ratings and reviews ===================== -->
-            <VBox spacing="16" minWidth="260" prefWidth="320" maxWidth="340">
-
-                <VBox styleClass="card-flush">
-                    <VBox styleClass="card-header"><Label text="Ratings" styleClass="text-subtitle"/></VBox>
-                    <VBox>
-                        <padding><Insets top="14" right="18" bottom="16" left="18"/></padding>
-                        <VBox fx:id="ratingSummary" spacing="8"/>
-                    </VBox>
-                </VBox>
-
-                <VBox styleClass="card-flush">
-                    <VBox spacing="3" styleClass="card-header">
-                        <Label text="Reviews" styleClass="text-subtitle"/>
-                        <Label fx:id="reviewStoreLabel" styleClass="text-caption"/>
-                    </VBox>
-                    <VBox spacing="12">
-                        <padding><Insets top="14" right="18" bottom="16" left="18"/></padding>
-                        <VBox fx:id="reviewList" spacing="9"/>
-
-                        <!-- Leave a review: a rating from 1 to 5 and an optional headline. -->
-                        <VBox spacing="7">
-                            <padding><Insets top="10"/></padding>
-                            <Label text="Leave a review" styleClass="field-label"/>
-                            <HBox spacing="7" alignment="CENTER_LEFT">
-                                <ComboBox fx:id="ratingBox" prefWidth="90">
-                                    <items>
-                                        <FXCollections fx:factory="observableArrayList">
-                                            <Integer fx:value="5"/>
-                                            <Integer fx:value="4"/>
-                                            <Integer fx:value="3"/>
-                                            <Integer fx:value="2"/>
-                                            <Integer fx:value="1"/>
-                                        </FXCollections>
-                                    </items>
-                                    <value><Integer fx:value="5"/></value>
-                                </ComboBox>
-                                <TextField fx:id="reviewHeadline" promptText="Headline (optional)"
-                                           HBox.hgrow="ALWAYS"/>
-                            </HBox>
-                            <HBox spacing="7" alignment="CENTER_LEFT">
-                                <Region HBox.hgrow="ALWAYS"/>
-                                <Button fx:id="reviewButton" text="Review" styleClass="btn-secondary, btn-small"
-                                        onAction="#postReview"/>
-                            </HBox>
-                        </VBox>
-                    </VBox>
-                </VBox>
-            </VBox>
+    <!-- The post -->
+    <VBox spacing="8" styleClass="card">
+        <Label fx:id="titleLabel" styleClass="title" wrapText="true"/>
+        <Label fx:id="infoLabel" styleClass="small"/>
+        <Label fx:id="bodyLabel" wrapText="true"/>
+        <HBox spacing="10">
+            <Button text="Back to posts" onAction="#back"/>
+            <!-- Only for the post's author and the admin. -->
+            <Button fx:id="editButton" text="Edit" onAction="#editPost"/>
         </HBox>
     </VBox>
-</ScrollPane>
+
+    <!-- A validation message, for example "A comment cannot be empty." -->
+    <Label fx:id="errorLabel" styleClass="error-text" wrapText="true"/>
+
+    <HBox spacing="14" VBox.vgrow="ALWAYS">
+        <!-- Comments -->
+        <VBox spacing="8" styleClass="card" HBox.hgrow="ALWAYS">
+            <Label text="Comments" styleClass="subtitle"/>
+            <ListView fx:id="commentList" VBox.vgrow="ALWAYS"/>
+            <HBox spacing="8">
+                <TextField fx:id="commentField" promptText="Write a comment" HBox.hgrow="ALWAYS" onAction="#addComment"/>
+                <Button text="Comment" styleClass="primary" onAction="#addComment"/>
+            </HBox>
+            <!-- Only for your own comments (or for the admin). -->
+            <HBox spacing="8">
+                <Button fx:id="editCommentButton" text="Edit selected" onAction="#editComment"/>
+                <Button fx:id="deleteCommentButton" text="Delete selected" styleClass="danger" onAction="#deleteComment"/>
+            </HBox>
+        </VBox>
+
+        <!-- Reviews -->
+        <VBox spacing="8" styleClass="card" prefWidth="380">
+            <Label text="Reviews" styleClass="subtitle"/>
+            <Label fx:id="averageLabel"/>
+            <ListView fx:id="reviewList" VBox.vgrow="ALWAYS"/>
+            <HBox spacing="8">
+                <ComboBox fx:id="ratingBox" promptText="Rating" prefWidth="100"/>
+                <TextField fx:id="reviewField" promptText="Your review (optional)" HBox.hgrow="ALWAYS"/>
+            </HBox>
+            <Button text="Add review" styleClass="primary" onAction="#addReview"/>
+        </VBox>
+    </HBox>
+</VBox>

@@ -1,53 +1,33 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<!--
-  Tags screen (admin only): add a tag, see all tags, see how often each is used.
-  Controller: org.example.bloggingplatformi.controller.TagsController
--->
+<!-- Tags (admin only): add and delete tags, and see how many posts use each one. -->
 
 <?import javafx.geometry.Insets?>
 <?import javafx.scene.control.Button?>
 <?import javafx.scene.control.Label?>
-<?import javafx.scene.control.ScrollPane?>
+<?import javafx.scene.control.ListView?>
 <?import javafx.scene.control.TextField?>
-<?import javafx.scene.layout.FlowPane?>
 <?import javafx.scene.layout.HBox?>
 <?import javafx.scene.layout.VBox?>
 
-<ScrollPane xmlns="http://javafx.com/javafx" xmlns:fx="http://javafx.com/fxml"
-            fx:controller="org.example.bloggingplatformi.controller.TagsController"
-            fitToWidth="true">
-    <VBox spacing="16">
-        <padding><Insets top="24" right="26" bottom="28" left="26"/></padding>
+<HBox xmlns="http://javafx.com/javafx" xmlns:fx="http://javafx.com/fxml"
+      fx:controller="org.example.bloggingplatformi.controller.TagsController"
+      spacing="14">
+    <padding><Insets top="24" right="24" bottom="24" left="24"/></padding>
 
-        <!-- Create a tag. A FlowPane wraps, so the hint moves to a new line on a narrow window. -->
-        <FlowPane hgap="10" vgap="8" alignment="CENTER_LEFT" styleClass="card">
-            <padding><Insets top="13" right="16" bottom="13" left="16"/></padding>
-            <TextField fx:id="newTagField" promptText="New tag name" prefWidth="260"
-                       onAction="#createTag"/>
-            <Button fx:id="addButton" text="Add tag" styleClass="btn-primary" onAction="#createTag"/>
-            <Label text="Names are stored lower-case, so “Java” and “java” cannot both exist."
-                   styleClass="text-caption"/>
-        </FlowPane>
-
-        <HBox spacing="16">
-            <!-- Left: every tag as a chip with a delete button. -->
-            <VBox styleClass="card-flush" HBox.hgrow="ALWAYS" minWidth="0">
-                <VBox styleClass="card-header"><Label text="All tags" styleClass="text-subtitle"/></VBox>
-                <VBox>
-                    <padding><Insets top="14" right="18" bottom="16" left="18"/></padding>
-                    <FlowPane fx:id="cloud" hgap="9" vgap="9"/>
-                </VBox>
-            </VBox>
-
-            <!-- Right: how many posts use each tag. -->
-            <VBox styleClass="card-flush" minWidth="250" prefWidth="320" maxWidth="340">
-                <VBox styleClass="card-header"><Label text="Usage" styleClass="text-subtitle"/></VBox>
-                <VBox>
-                    <padding><Insets top="14" right="18" bottom="16" left="18"/></padding>
-                    <VBox fx:id="usageList" spacing="9"/>
-                </VBox>
-            </VBox>
+    <VBox spacing="8" styleClass="card" HBox.hgrow="ALWAYS">
+        <Label text="All tags (sorted with our merge sort)" styleClass="subtitle"/>
+        <ListView fx:id="tagList" VBox.vgrow="ALWAYS"/>
+        <HBox spacing="8">
+            <TextField fx:id="nameField" promptText="New tag name" onAction="#addTag"/>
+            <Button text="Add" styleClass="primary" onAction="#addTag"/>
+            <Button text="Delete selected" styleClass="danger" onAction="#deleteTag"/>
         </HBox>
+        <Label fx:id="errorLabel" styleClass="error-text"/>
     </VBox>
-</ScrollPane>
+
+    <VBox spacing="8" styleClass="card" prefWidth="320">
+        <Label text="Posts per tag" styleClass="subtitle"/>
+        <ListView fx:id="usageList" VBox.vgrow="ALWAYS"/>
+    </VBox>
+</HBox>

@@ -1,2 +1,0 @@
-cache,max_entries,workload,hits,misses,evictions,hit_rate
-LRU,200,findById_x2000_skewed (80% to 100 hot ids),15853,4147,3947,0.7927
