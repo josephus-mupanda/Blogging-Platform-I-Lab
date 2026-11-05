@@ -31,15 +31,18 @@ CREATE TABLE posts (
     title      VARCHAR(200) NOT NULL CHECK (trim(title) <> ''),
     body       TEXT         NOT NULL,
     created_at TIMESTAMP    NOT NULL DEFAULT now(),
-    updated_at TIMESTAMP    NOT NULL DEFAULT now()
+    updated_at TIMESTAMP    NOT NULL DEFAULT now(),
+    deleted_at TIMESTAMPTZ
 );
 
 CREATE UNIQUE INDEX uq_posts_normalized_title ON posts (lower(btrim(title)));
+CREATE INDEX idx_posts_archived ON posts (deleted_at DESC) WHERE deleted_at IS NOT NULL;
 
 -- One row per tag name, for example "java".
 CREATE TABLE tags (
     tag_id BIGSERIAL   PRIMARY KEY,
-    name   VARCHAR(50) NOT NULL UNIQUE
+    name   VARCHAR(50) NOT NULL UNIQUE,
+    deleted_at TIMESTAMPTZ
 );
 
 -- Many-to-many link: a post has many tags, and a tag is on many posts.

@@ -15,7 +15,8 @@ const commentSchema = {
     authorId:   { bsonType: 'long' },
     authorName: { bsonType: 'string' },
     body:       { bsonType: 'string', minLength: 1 },
-    createdAt:  { bsonType: 'date' }
+    createdAt:  { bsonType: 'date' },
+    deletedAt:  { bsonType: 'date' }
   }
 };
 

@@ -61,6 +61,8 @@ public class UsersController {
     private void showSelection(User user) {
         statusButton.setDisable(user == null || user.role().isAdmin());
         statusButton.setText(user != null && !user.active() ? "Reactivate account" : "Deactivate account");
+        statusButton.getStyleClass().removeAll("primary", "danger");
+        statusButton.getStyleClass().add(user != null && !user.active() ? "primary" : "danger");
         statusMessage.setText(user == null ? "Select an account to change its status."
                 : user.role().isAdmin() ? "Administrator accounts are protected." : "");
     }

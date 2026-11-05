@@ -12,6 +12,7 @@ public class CommentService {
 
     private final CommentDao commentDao = new CommentDao();
     private final UserService userService = new UserService();
+    private final PostService postService = new PostService();
 
     public List<Comment> forPost(long postId) {
         return commentDao.findByPost(postId);
@@ -20,6 +21,7 @@ public class CommentService {
     public void add(long postId, User author, String body) {
         checkBody(body);
         userService.requireActive(author);
+        postService.requireVisible(postId);
         commentDao.insert(postId, author.id(), author.displayName(), body.strip());
     }
 
@@ -30,13 +32,15 @@ public class CommentService {
         commentDao.updateBody(comment.id(), body.strip());
     }
 
-    public void delete(Comment comment, User user) {
+    public void archive(Comment comment, User user) {
         checkAllowed(comment, user);
-        commentDao.delete(comment.id());
+        if (!commentDao.archive(comment.id())) {
+            throw new ValidationException("This comment is already in Trash or no longer available.");
+        }
     }
 
-    public long count() {
-        return commentDao.count();
+    public long count(List<Long> archivedPostIds) {
+        return commentDao.count(archivedPostIds);
     }
 
     public boolean canChange(Comment comment, User user) {
@@ -48,6 +52,7 @@ public class CommentService {
         if (!canChange(comment, user)) {
             throw new ValidationException("You can only change your own comments.");
         }
+        postService.requireVisible(comment.postId());
     }
 
     private void checkBody(String body) {

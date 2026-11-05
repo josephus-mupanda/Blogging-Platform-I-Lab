@@ -55,12 +55,8 @@ public class ReviewDao {
                 .append("createdAt", new Date()));
     }
 
-    /** Deletes all reviews of a post (PostgreSQL's cascade cannot reach MongoDB). */
-    public void deleteByPost(long postId) {
-        reviews().deleteMany(Filters.eq("postId", postId));
-    }
-
-    public long count() {
-        return reviews().countDocuments();
+    public long count(List<Long> archivedPostIds) {
+        return archivedPostIds.isEmpty() ? reviews().countDocuments()
+                : reviews().countDocuments(Filters.nin("postId", archivedPostIds));
     }
 }

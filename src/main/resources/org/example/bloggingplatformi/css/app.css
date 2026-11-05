@@ -98,7 +98,7 @@
     -fx-background-color: #eef2ff;
 }
 
-.text-field, .text-area, .combo-box-base {
+.text-field, .text-area, .combo-box-base, .choice-box {
     -fx-background-color: white;
     -fx-background-radius: 8;
     -fx-border-color: #cfd7e5;
@@ -108,7 +108,7 @@
 .text-field {
     -fx-padding: 8 11;
 }
-.text-field:focused, .text-area:focused, .combo-box-base:focused {
+.text-field:focused, .text-area:focused, .combo-box-base:focused, .choice-box:focused {
     -fx-border-color: #6366f1;
 }
 .text-area .content {

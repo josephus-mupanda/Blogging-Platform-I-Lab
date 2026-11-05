@@ -29,7 +29,7 @@
                     <HBox spacing="10">
                         <Button fx:id="editButton" text="Edit post" onAction="#editPost"
                                 visible="false" managed="${editButton.visible}"/>
-                        <Button fx:id="deleteButton" text="Delete post" styleClass="danger" onAction="#deletePost"
+                        <Button fx:id="deleteButton" text="Move to Trash" styleClass="danger" onAction="#deletePost"
                                 visible="false" managed="${deleteButton.visible}"/>
                     </HBox>
                 </VBox>
@@ -42,7 +42,7 @@
                     <HBox spacing="8" alignment="CENTER_LEFT"
                           visible="${!editCommentButton.disabled}" managed="${!editCommentButton.disabled}">
                         <Button fx:id="editCommentButton" text="Edit selected" onAction="#editComment"/>
-                        <Button fx:id="deleteCommentButton" text="Delete selected" styleClass="danger" onAction="#deleteComment"/>
+                        <Button fx:id="deleteCommentButton" text="Move comment to Trash" styleClass="danger" onAction="#deleteComment"/>
                     </HBox>
                     <VBox spacing="8" styleClass="form-section">
                         <Label text="Join the discussion" styleClass="field-label"/>

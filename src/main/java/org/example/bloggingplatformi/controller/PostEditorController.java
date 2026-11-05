@@ -76,7 +76,10 @@ public class PostEditorController {
             }
         });
         if (postId != null) {
-            Post post = postService.findById(postId);
+            Post post = postService.open(postId);
+            if (!Session.canEditPost(post.authorId())) {
+                throw new ValidationException("You can only edit your own posts.");
+            }
             titleField.setText(post.title());
             bodyArea.setText(post.body());
 

@@ -9,10 +9,13 @@ import com.mongodb.client.MongoCollection;
 import com.mongodb.client.model.Filters;
 import com.mongodb.client.model.Sorts;
 import com.mongodb.client.model.Updates;
+import org.bson.conversions.Bson;
 import org.bson.Document;
 import org.bson.types.ObjectId;
 
 import org.example.bloggingplatformi.db.Mongo;
+import org.example.bloggingplatformi.exception.ValidationException;
+import org.example.bloggingplatformi.model.ArchivedItem;
 import org.example.bloggingplatformi.model.Comment;
 
 /**
@@ -29,7 +32,8 @@ public class CommentDao {
     /** The comments of a post, oldest first. */
     public List<Comment> findByPost(long postId) {
         List<Comment> result = new ArrayList<>();
-        for (Document document : comments().find(Filters.eq("postId", postId)).sort(Sorts.ascending("createdAt"))) {
+        for (Document document : comments().find(Filters.and(Filters.eq("postId", postId), visible()))
+                .sort(Sorts.ascending("createdAt"))) {
             result.add(new Comment(
                     document.getObjectId("_id").toHexString(),
                     document.getLong("postId"),
@@ -50,22 +54,42 @@ public class CommentDao {
     }
 
     public void updateBody(String commentId, String body) {
-        comments().updateOne(Filters.eq("_id", new ObjectId(commentId)), Updates.set("body", body));
+        if (comments().updateOne(Filters.and(id(commentId), visible()), Updates.set("body", body)).getMatchedCount() == 0) {
+            throw new ValidationException("This comment is no longer available.");
+        }
     }
 
-    public void delete(String commentId) {
-        comments().deleteOne(Filters.eq("_id", new ObjectId(commentId)));
+    public boolean archive(String commentId) {
+        return comments().updateOne(Filters.and(id(commentId), visible()), Updates.currentDate("deletedAt"))
+                .getMatchedCount() == 1;
     }
 
-    /**
-     * Deletes all comments of a post. Needed when a post is deleted, because
-     * PostgreSQL's ON DELETE CASCADE cannot reach MongoDB.
-     */
-    public void deleteByPost(long postId) {
-        comments().deleteMany(Filters.eq("postId", postId));
+    public boolean restore(String commentId) {
+        return comments().updateOne(Filters.and(id(commentId), Filters.ne("deletedAt", null)), Updates.unset("deletedAt"))
+                .getMatchedCount() == 1;
     }
 
-    public long count() {
-        return comments().countDocuments();
+    public List<ArchivedItem> archived() {
+        List<ArchivedItem> items = new ArrayList<>();
+        for (Document document : comments().find(Filters.ne("deletedAt", null)).sort(Sorts.descending("deletedAt"))) {
+            long postId = document.getLong("postId");
+            items.add(new ArchivedItem(ArchivedItem.Kind.COMMENT, document.getObjectId("_id").toHexString(),
+                    document.getString("authorName") + " · Post #" + postId, document.getString("body"),
+                    document.getDate("deletedAt").toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime(), postId));
+        }
+        return items;
+    }
+
+    public long count(List<Long> archivedPostIds) {
+        return comments().countDocuments(archivedPostIds.isEmpty() ? visible()
+                : Filters.and(visible(), Filters.nin("postId", archivedPostIds)));
+    }
+
+    private Bson visible() {
+        return Filters.eq("deletedAt", null); // also matches documents written before soft deletion
+    }
+
+    private Bson id(String commentId) {
+        return Filters.eq("_id", new ObjectId(commentId));
     }
 }

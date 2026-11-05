@@ -53,7 +53,7 @@ public class TagsController {
                 String posts = count + (count == 1 ? " post" : " posts");
                 var link = TagChips.link(tag.name() + "  ·  " + count, "Browse " + posts + " tagged " + tag.name(),
                         () -> main.showPostsForTag(tag));
-                return TagChips.removable(link, "Delete tag " + tag.name(), () -> deleteTag(tag));
+                return TagChips.removable(link, "Move tag " + tag.name() + " to Trash", () -> archiveTag(tag));
             }).toList());
             emptyCatalog.setVisible(tags.isEmpty());
         } catch (RuntimeException e) {
@@ -78,16 +78,17 @@ public class TagsController {
         }
     }
 
-    private void deleteTag(Tag tag) {
-        if (Dialogs.confirm("Delete tag?", "\"" + tag.name() + "\" will be removed from its posts.", "Delete tag", true)) {
+    private void archiveTag(Tag tag) {
+        if (Dialogs.confirm("Move tag to Trash?", "\"" + tag.name()
+                + "\" will be hidden on its posts. Restoring the tag shows it again.", "Move to Trash", true)) {
             try {
                 userService.requireAdmin(Session.user());
-                tagService.delete(tag.id());
+                tagService.archive(tag.id());
                 errorLabel.setText("");
                 refresh();
                 nameField.requestFocus();
             } catch (RuntimeException e) {
-                Dialogs.error("Could not delete the tag: " + e.getMessage());
+                Dialogs.error("Could not move the tag to Trash: " + e.getMessage());
             }
         }
     }

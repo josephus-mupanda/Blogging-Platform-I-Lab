@@ -10,19 +10,20 @@ import java.util.Map;
 
 import org.example.bloggingplatformi.db.Database;
 import org.example.bloggingplatformi.exception.DatabaseException;
+import org.example.bloggingplatformi.model.ArchivedItem;
 import org.example.bloggingplatformi.model.Tag;
 
 /** Reads and writes the tags table with JDBC. */
 public class TagDao {
 
     public List<Tag> findAll() {
-        return query("SELECT * FROM tags", null);
+        return query("SELECT * FROM tags WHERE deleted_at IS NULL", null);
     }
 
     /** The tags of one post: a JOIN through the post_tags link table. */
     public List<Tag> findByPost(long postId) {
         return query("SELECT t.* FROM tags t JOIN post_tags pt ON pt.tag_id = t.tag_id"
-                + " WHERE pt.post_id = ? ORDER BY t.name", postId);
+                + " WHERE pt.post_id = ? AND t.deleted_at IS NULL ORDER BY t.name", postId);
     }
 
     private List<Tag> query(String sql, Long postId) {
@@ -52,13 +53,46 @@ public class TagDao {
         }
     }
 
-    /** Deletes a tag. It is removed from its posts too (ON DELETE CASCADE on post_tags). */
-    public void delete(long tagId) {
-        try (PreparedStatement statement = Database.connection().prepareStatement("DELETE FROM tags WHERE tag_id = ?")) {
-            statement.setLong(1, tagId);
-            statement.executeUpdate();
+    public boolean isArchivedName(String name) {
+        try (PreparedStatement statement = Database.connection().prepareStatement(
+                "SELECT 1 FROM tags WHERE name = ? AND deleted_at IS NOT NULL")) {
+            statement.setString(1, name);
+            return statement.executeQuery().next();
         } catch (SQLException e) {
-            throw new DatabaseException("Could not delete the tag", e);
+            throw new DatabaseException("Could not check the tag", e);
+        }
+    }
+
+    public boolean archive(long tagId) {
+        return changeStatus(tagId, "UPDATE tags SET deleted_at = now() WHERE tag_id = ? AND deleted_at IS NULL");
+    }
+
+    public boolean restore(long tagId) {
+        return changeStatus(tagId, "UPDATE tags SET deleted_at = NULL WHERE tag_id = ? AND deleted_at IS NOT NULL");
+    }
+
+    private boolean changeStatus(long tagId, String sql) {
+        try (PreparedStatement statement = Database.connection().prepareStatement(sql)) {
+            statement.setLong(1, tagId);
+            return statement.executeUpdate() == 1;
+        } catch (SQLException e) {
+            throw new DatabaseException("Could not change the tag status", e);
+        }
+    }
+
+    public List<ArchivedItem> archived() {
+        try (PreparedStatement statement = Database.connection().prepareStatement(
+                "SELECT tag_id, name, deleted_at FROM tags WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC, tag_id");
+             ResultSet rows = statement.executeQuery()) {
+            List<ArchivedItem> items = new ArrayList<>();
+            while (rows.next()) {
+                items.add(new ArchivedItem(ArchivedItem.Kind.TAG, rows.getString("tag_id"), rows.getString("name"),
+                        "Restoring this tag also restores its visibility on linked posts.",
+                        rows.getTimestamp("deleted_at").toLocalDateTime(), null));
+            }
+            return items;
+        } catch (SQLException e) {
+            throw new DatabaseException("Could not load tags in trash", e);
         }
     }
 
@@ -67,8 +101,10 @@ public class TagDao {
      * LEFT JOIN, so a tag used by no post is still listed, with 0.
      */
     public Map<String, Integer> usage() {
-        String sql = "SELECT t.name, COUNT(pt.post_id) AS posts FROM tags t"
+        String sql = "SELECT t.name, COUNT(p.post_id) AS posts FROM tags t"
                 + " LEFT JOIN post_tags pt ON pt.tag_id = t.tag_id"
+                + " LEFT JOIN posts p ON p.post_id = pt.post_id AND p.deleted_at IS NULL"
+                + " WHERE t.deleted_at IS NULL"
                 + " GROUP BY t.name ORDER BY posts DESC, t.name";
         try (PreparedStatement statement = Database.connection().prepareStatement(sql)) {
             ResultSet rows = statement.executeQuery();

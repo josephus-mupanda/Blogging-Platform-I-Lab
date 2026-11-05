@@ -34,12 +34,17 @@ public class TagService {
 
         // The list is sorted, so binary search can tell quickly if the name is already used.
         if (Sorting.binarySearch(findAll(), new Tag(0, clean), BY_NAME) >= 0 || !tagDao.insert(clean)) {
+            if (tagDao.isArchivedName(clean)) {
+                throw new ValidationException("This tag is in Trash. Restore it to reuse its name.");
+            }
             throw new ValidationException("The tag \"" + clean + "\" already exists.");
         }
     }
 
-    public void delete(long tagId) {
-        tagDao.delete(tagId);
+    public void archive(long tagId) {
+        if (!tagDao.archive(tagId)) {
+            throw new ValidationException("This tag is already in Trash or no longer available.");
+        }
     }
 
     /** Tag name -> number of posts that use it, most used first. */

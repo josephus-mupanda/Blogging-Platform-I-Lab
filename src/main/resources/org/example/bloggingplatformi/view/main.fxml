@@ -24,6 +24,7 @@
             <!-- Admin only: hidden for bloggers and readers. -->
             <Button fx:id="tagsButton" text="Tags" styleClass="nav" maxWidth="Infinity" onAction="#showTags"/>
             <Button fx:id="usersButton" text="Users" styleClass="nav" maxWidth="Infinity" onAction="#showUsers"/>
+            <Button fx:id="trashButton" text="Trash" styleClass="nav" maxWidth="Infinity" onAction="#showTrash"/>
         </VBox>
     </left>
 

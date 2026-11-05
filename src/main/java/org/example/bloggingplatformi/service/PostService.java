@@ -4,18 +4,14 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.example.bloggingplatformi.dao.CommentDao;
 import org.example.bloggingplatformi.dao.PostDao;
-import org.example.bloggingplatformi.dao.ReviewDao;
 import org.example.bloggingplatformi.dao.TagDao;
 import org.example.bloggingplatformi.exception.ValidationException;
 import org.example.bloggingplatformi.model.Post;
 import org.example.bloggingplatformi.model.Tag;
+import org.example.bloggingplatformi.model.User;
 
-/**
- * Business rules for posts: validation, the cache, and deleting a post's
- * comments and reviews in MongoDB when the post is deleted.
- */
+/** Business rules for posts: validation, the cache, and recoverable deletion. */
 public class PostService {
 
     /** How many posts one page of the post list shows. */
@@ -29,13 +25,33 @@ public class PostService {
 
     private final PostDao postDao = new PostDao();
     private final TagDao tagDao = new TagDao();
-    private final CommentDao commentDao = new CommentDao();
-    private final ReviewDao reviewDao = new ReviewDao();
+    private final UserService userService = new UserService();
 
     /** Reads the post from the cache if it is there; otherwise from the database, then keeps it in the cache. */
     public Post findById(long postId) {
         synchronized (CACHE) {
             return CACHE.computeIfAbsent(postId, postDao::findById);
+        }
+    }
+
+    /** Recheck visibility before opening a post, even if another window cached it. */
+    public Post open(long postId) {
+        synchronized (CACHE) {
+            if (CACHE.containsKey(postId) && !postDao.isVisible(postId)) {
+                CACHE.remove(postId);
+                throw new ValidationException("This post is no longer available.");
+            }
+            Post post = findById(postId);
+            if (post == null) {
+                throw new ValidationException("This post is no longer available.");
+            }
+            return post;
+        }
+    }
+
+    public void requireVisible(long postId) {
+        if (!postDao.isVisible(postId)) {
+            throw new ValidationException("This post is no longer available.");
         }
     }
 
@@ -77,17 +93,25 @@ public class PostService {
         }
     }
 
-    /**
-     * Deletes the post, and first its comments and reviews in MongoDB:
-     * PostgreSQL's ON DELETE CASCADE cannot reach another database.
-     */
-    public void delete(long postId) {
+    public void archive(long postId, User actor) {
+        userService.requireActive(actor);
         synchronized (CACHE) {
-            commentDao.deleteByPost(postId);
-            reviewDao.deleteByPost(postId);
-            postDao.delete(postId);
             CACHE.remove(postId);
+            if (!postDao.archive(postId, actor.id(), actor.role().isAdmin())) {
+                throw new ValidationException("This post is already in Trash or you cannot remove it.");
+            }
         }
+    }
+
+    boolean restore(long postId) {
+        synchronized (CACHE) {
+            CACHE.remove(postId);
+            return postDao.restore(postId);
+        }
+    }
+
+    public List<Long> archivedIds() {
+        return postDao.archivedIds();
     }
 
     private void validate(String title, String body) {

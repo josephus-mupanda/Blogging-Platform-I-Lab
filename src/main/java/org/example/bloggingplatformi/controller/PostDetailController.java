@@ -31,7 +31,6 @@ import org.example.bloggingplatformi.model.Tag;
 import org.example.bloggingplatformi.service.CommentService;
 import org.example.bloggingplatformi.service.PostService;
 import org.example.bloggingplatformi.service.ReviewService;
-import org.example.bloggingplatformi.service.UserService;
 import org.example.bloggingplatformi.ui.Dates;
 import org.example.bloggingplatformi.ui.Dialogs;
 import org.example.bloggingplatformi.ui.Fxml;
@@ -43,10 +42,10 @@ public class PostDetailController {
 
     private final MainController main;
     private final long postId;
+    private final Post post;
     private final PostService postService = new PostService();
     private final CommentService commentService = new CommentService();
     private final ReviewService reviewService = new ReviewService();
-    private final UserService userService = new UserService();
     private final Parent root;
 
     @FXML private Label titleLabel;
@@ -73,9 +72,10 @@ public class PostDetailController {
     private final ToggleGroup ratings = new ToggleGroup();
     private boolean twoColumns;
 
-    public PostDetailController(MainController main, long postId) {
+    public PostDetailController(MainController main, Post post) {
         this.main = main;
-        this.postId = postId;
+        this.post = post;
+        this.postId = post.id();
         this.root = Fxml.load("post-detail.fxml", this);
     }
 
@@ -150,7 +150,6 @@ public class PostDetailController {
     }
 
     private void showPost() {
-        Post post = postService.findById(postId); // from the cache if it is there
         for (Tag tag : postService.tagsOf(postId)) {
             postTags.getChildren().add(TagChips.link(tag.name(), "Browse posts tagged " + tag.name(),
                     () -> main.showPostsForTag(tag)));
@@ -227,6 +226,9 @@ public class PostDetailController {
     @FXML
     private void editComment() {
         Comment comment = commentList.getSelectionModel().getSelectedItem();
+        if (comment == null) {
+            return;
+        }
         Optional<String> newText = Dialogs.editComment(comment.body());
         if (newText.isPresent()) {
             try {
@@ -244,9 +246,10 @@ public class PostDetailController {
     @FXML
     private void deleteComment() {
         Comment comment = commentList.getSelectionModel().getSelectedItem();
-        if (Dialogs.confirm("Delete comment?", "This comment will be permanently removed.", "Delete comment", true)) {
+        if (comment != null && Dialogs.confirm("Move comment to Trash?",
+                "The comment will be hidden. An administrator can restore it.", "Move to Trash", true)) {
             try {
-                commentService.delete(comment, Session.user());
+                commentService.archive(comment, Session.user());
                 commentError.setText("");
                 showComments();
             } catch (RuntimeException e) {
@@ -282,11 +285,10 @@ public class PostDetailController {
 
     @FXML
     private void deletePost() {
-        if (Dialogs.confirm("Delete post?", "\"" + titleLabel.getText()
-                + "\" and its comments and reviews will be permanently removed.", "Delete post", true)) {
+        if (Dialogs.confirm("Move post to Trash?", "\"" + post.title()
+                + "\" and its discussion will be hidden. An administrator can restore the post.", "Move to Trash", true)) {
             try {
-                userService.requireActive(Session.user());
-                postService.delete(postId);
+                postService.archive(postId, Session.user());
                 main.showPosts();
             } catch (RuntimeException e) {
                 Dialogs.error("Could not delete the post: " + e.getMessage());

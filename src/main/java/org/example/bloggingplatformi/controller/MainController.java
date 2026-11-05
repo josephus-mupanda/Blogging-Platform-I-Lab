@@ -15,6 +15,8 @@ import javafx.scene.layout.VBox;
 import org.example.bloggingplatformi.model.Post;
 import org.example.bloggingplatformi.model.Tag;
 import org.example.bloggingplatformi.model.User;
+import org.example.bloggingplatformi.exception.ValidationException;
+import org.example.bloggingplatformi.service.PostService;
 import org.example.bloggingplatformi.ui.Dates;
 import org.example.bloggingplatformi.ui.Dialogs;
 import org.example.bloggingplatformi.ui.Fxml;
@@ -28,11 +30,13 @@ public class MainController {
 
     private final Runnable onSignOut;
     private final Parent root;
+    private final PostService postService = new PostService();
     private PostListController postList;
     private PostEditorController editor;
 
     @FXML private Button tagsButton;
     @FXML private Button usersButton;
+    @FXML private Button trashButton;
     @FXML private Button dashboardButton;
     @FXML private Button postsButton;
     @FXML private Label screenTitle;
@@ -55,6 +59,8 @@ public class MainController {
         tagsButton.setManaged(Session.isAdmin()); // managed = false: it takes no space when hidden
         usersButton.setVisible(Session.isAdmin());
         usersButton.setManaged(Session.isAdmin());
+        trashButton.setVisible(Session.isAdmin());
+        trashButton.setManaged(Session.isAdmin());
 
         showDashboard();
     }
@@ -68,7 +74,7 @@ public class MainController {
         editor = null;
         screenTitle.setText(title);
         content.getChildren().setAll(screen);
-        for (Button button : new Button[] {dashboardButton, postsButton, tagsButton, usersButton}) {
+        for (Button button : new Button[] {dashboardButton, postsButton, tagsButton, usersButton, trashButton}) {
             button.getStyleClass().remove("active");
         }
         activeButton.getStyleClass().add("active");
@@ -103,7 +109,13 @@ public class MainController {
 
     public void showPost(long postId) {
         if (confirmDiscardDraft()) {
-            show("Post", new PostDetailController(this, postId).getRoot(), postsButton);
+            try {
+                show("Post", new PostDetailController(this, postService.open(postId)).getRoot(), postsButton);
+            } catch (ValidationException e) {
+                Dialogs.error(e.getMessage());
+            } catch (RuntimeException e) {
+                Dialogs.error("Could not open the post: " + e.getMessage());
+            }
         }
     }
 
@@ -147,7 +159,7 @@ public class MainController {
 
     /** postId = null for a new post. */
     public void showEditor(Long postId) {
-        if (confirmDiscardDraft()) {
+        if (Session.canWritePosts() && confirmDiscardDraft()) {
             try {
                 PostEditorController next = new PostEditorController(this, postId);
                 show(postId == null ? "New post" : "Edit post", next.getRoot(), postsButton);
@@ -160,7 +172,7 @@ public class MainController {
 
     @FXML
     public void showTags() {
-        if (confirmDiscardDraft()) {
+        if (Session.isAdmin() && confirmDiscardDraft()) {
             show("Tags", new TagsController(this).getRoot(), tagsButton);
         }
     }
@@ -169,6 +181,13 @@ public class MainController {
     public void showUsers() {
         if (Session.isAdmin() && confirmDiscardDraft()) {
             show("Users", new UsersController().getRoot(), usersButton);
+        }
+    }
+
+    @FXML
+    public void showTrash() {
+        if (Session.isAdmin() && confirmDiscardDraft()) {
+            show("Trash", new TrashController().getRoot(), trashButton);
         }
     }
 

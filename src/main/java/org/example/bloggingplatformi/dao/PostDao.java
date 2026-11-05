@@ -11,6 +11,7 @@ import java.util.List;
 import org.example.bloggingplatformi.db.Database;
 import org.example.bloggingplatformi.exception.DatabaseException;
 import org.example.bloggingplatformi.exception.ValidationException;
+import org.example.bloggingplatformi.model.ArchivedItem;
 import org.example.bloggingplatformi.model.Post;
 import org.postgresql.util.PSQLException;
 
@@ -31,7 +32,7 @@ public class PostDao {
     }
 
     private Post findById(Connection connection, long postId) throws SQLException {
-        String sql = SELECT_POSTS + " WHERE p.post_id = ?";
+        String sql = SELECT_POSTS + " WHERE p.post_id = ? AND p.deleted_at IS NULL";
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setLong(1, postId);
             try (ResultSet rows = statement.executeQuery()) {
@@ -47,7 +48,7 @@ public class PostDao {
      */
     public List<Post> search(String keyword, Long authorId, Long tagId, int limit, int offset) {
         List<Object> values = new ArrayList<>();
-        String sql = SELECT_POSTS + " WHERE 1 = 1" + filters(keyword, authorId, tagId, values)
+        String sql = SELECT_POSTS + " WHERE p.deleted_at IS NULL" + filters(keyword, authorId, tagId, values)
                 + " ORDER BY p.created_at DESC, p.post_id DESC LIMIT ? OFFSET ?";
         values.add(limit);
         values.add(offset);
@@ -70,7 +71,7 @@ public class PostDao {
     /** How many posts match the same filters, to know how many pages there are. */
     public int count(String keyword, Long authorId, Long tagId) {
         List<Object> values = new ArrayList<>();
-        String sql = "SELECT COUNT(*) FROM posts p WHERE 1 = 1" + filters(keyword, authorId, tagId, values);
+        String sql = "SELECT COUNT(*) FROM posts p WHERE p.deleted_at IS NULL" + filters(keyword, authorId, tagId, values);
         try (PreparedStatement statement = Database.connection().prepareStatement(sql)) {
             for (int i = 0; i < values.size(); i++) {
                 statement.setObject(i + 1, values.get(i));
@@ -100,7 +101,8 @@ public class PostDao {
             values.add(authorId);
         }
         if (tagId != null) {
-            sql += " AND p.post_id IN (SELECT post_id FROM post_tags WHERE tag_id = ?)";
+            sql += " AND p.post_id IN (SELECT pt.post_id FROM post_tags pt JOIN tags t USING (tag_id)"
+                    + " WHERE pt.tag_id = ? AND t.deleted_at IS NULL)";
             values.add(tagId);
         }
         return sql;
@@ -144,18 +146,19 @@ public class PostDao {
     /** Updates a post and replaces its tags, in one transaction. */
     public Post update(long postId, String title, String body, List<Long> tagIds) {
         List<Long> tags = List.copyOf(tagIds);
-        String sql = "UPDATE posts SET title = ?, body = ?, updated_at = now() WHERE post_id = ?";
+        String sql = "UPDATE posts SET title = ?, body = ?, updated_at = now() WHERE post_id = ? AND deleted_at IS NULL";
         try {
             Connection connection = Database.connection();
             connection.setAutoCommit(false);
             try (PreparedStatement statement = connection.prepareStatement(sql);
-                 PreparedStatement removeTags = connection.prepareStatement("DELETE FROM post_tags WHERE post_id = ?")) {
+                 PreparedStatement removeTags = connection.prepareStatement("DELETE FROM post_tags pt USING tags t"
+                         + " WHERE pt.post_id = ? AND pt.tag_id = t.tag_id AND t.deleted_at IS NULL")) {
                 checkUniqueTitle(connection, title, postId);
                 statement.setString(1, title);
                 statement.setString(2, body);
                 statement.setLong(3, postId);
                 if (statement.executeUpdate() == 0) {
-                    throw new SQLException("The post no longer exists.");
+                    throw new ValidationException("This post is no longer available.");
                 }
 
                 removeTags.setLong(1, postId);
@@ -212,23 +215,76 @@ public class PostDao {
     }
 
     private void saveTags(Connection connection, long postId, List<Long> tagIds) throws SQLException {
-        String sql = "INSERT INTO post_tags (post_id, tag_id) VALUES (?, ?)";
+        String sql = "INSERT INTO post_tags (post_id, tag_id)"
+                + " SELECT ?, tag_id FROM tags WHERE tag_id = ? AND deleted_at IS NULL FOR SHARE";
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
             for (long tagId : tagIds) {
                 statement.setLong(1, postId);
                 statement.setLong(2, tagId);
-                statement.executeUpdate();
+                if (statement.executeUpdate() == 0) {
+                    throw new ValidationException("tags", "A selected tag is no longer available. Review your tags and save again.");
+                }
             }
         }
     }
 
-    /** Deletes a post. Its post_tags rows go too (ON DELETE CASCADE). */
-    public void delete(long postId) {
-        try (PreparedStatement statement = Database.connection().prepareStatement("DELETE FROM posts WHERE post_id = ?")) {
+    public boolean isVisible(long postId) {
+        try (PreparedStatement statement = Database.connection().prepareStatement(
+                "SELECT 1 FROM posts WHERE post_id = ? AND deleted_at IS NULL")) {
             statement.setLong(1, postId);
-            statement.executeUpdate();
+            return statement.executeQuery().next();
         } catch (SQLException e) {
-            throw new DatabaseException("Could not delete the post", e);
+            throw new DatabaseException("Could not check the post", e);
+        }
+    }
+
+    public boolean archive(long postId, long actorId, boolean administrator) {
+        try (PreparedStatement statement = Database.connection().prepareStatement(
+                "UPDATE posts SET deleted_at = now() WHERE post_id = ? AND deleted_at IS NULL AND (author_id = ? OR ?)")) {
+            statement.setLong(1, postId);
+            statement.setLong(2, actorId);
+            statement.setBoolean(3, administrator);
+            return statement.executeUpdate() == 1;
+        } catch (SQLException e) {
+            throw new DatabaseException("Could not move the post to trash", e);
+        }
+    }
+
+    public boolean restore(long postId) {
+        try (PreparedStatement statement = Database.connection().prepareStatement(
+                "UPDATE posts SET deleted_at = NULL WHERE post_id = ? AND deleted_at IS NOT NULL")) {
+            statement.setLong(1, postId);
+            return statement.executeUpdate() == 1;
+        } catch (SQLException e) {
+            throw new DatabaseException("Could not restore the post", e);
+        }
+    }
+
+    public List<ArchivedItem> archived() {
+        try (PreparedStatement statement = Database.connection().prepareStatement(
+                "SELECT post_id, title, body, deleted_at FROM posts WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC, post_id");
+             ResultSet rows = statement.executeQuery()) {
+            List<ArchivedItem> items = new ArrayList<>();
+            while (rows.next()) {
+                items.add(new ArchivedItem(ArchivedItem.Kind.POST, rows.getString("post_id"), rows.getString("title"),
+                        rows.getString("body"), rows.getTimestamp("deleted_at").toLocalDateTime(), null));
+            }
+            return items;
+        } catch (SQLException e) {
+            throw new DatabaseException("Could not load posts in trash", e);
+        }
+    }
+
+    public List<Long> archivedIds() {
+        try (PreparedStatement statement = Database.connection().prepareStatement(
+                "SELECT post_id FROM posts WHERE deleted_at IS NOT NULL"); ResultSet rows = statement.executeQuery()) {
+            List<Long> ids = new ArrayList<>();
+            while (rows.next()) {
+                ids.add(rows.getLong(1));
+            }
+            return ids;
+        } catch (SQLException e) {
+            throw new DatabaseException("Could not load archived post IDs", e);
         }
     }
 

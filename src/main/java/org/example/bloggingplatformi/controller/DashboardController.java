@@ -66,8 +66,9 @@ public class DashboardController {
                 topTags.getItems().add(tag.getKey() + "  ·  " + count + (count == 1 ? " post" : " posts"));
             }
             // MongoDB
-            commentsCount.setText(String.valueOf(commentService.count()));
-            reviewsCount.setText(String.valueOf(reviewService.count()));
+            var archivedPosts = postService.archivedIds();
+            commentsCount.setText(String.valueOf(commentService.count(archivedPosts)));
+            reviewsCount.setText(String.valueOf(reviewService.count(archivedPosts)));
         } catch (RuntimeException e) {
             Dialogs.error("Could not load the dashboard. Are PostgreSQL and MongoDB running?\n\n" + e.getMessage());
         }

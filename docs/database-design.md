@@ -19,16 +19,18 @@ erDiagram
 
 ## PostgreSQL logical and physical model
 
-All columns are required. See the [schema](../db/postgres/schema.sql) and [index script](../db/postgres/indexes.sql).
+The archive timestamp is optional. See the [schema](../db/postgres/schema.sql) and [index script](../db/postgres/indexes.sql).
 
 | Table | Attributes and constraints |
 |---|---|
-| `users` | `user_id BIGSERIAL` primary key. Unique `username VARCHAR(50)` and `email VARCHAR(255)`. `password_hash VARCHAR(64)` stores a SHA-256 hex digest. Also includes `display_name VARCHAR(100)`, `role VARCHAR(10)` restricted to `ADMIN`, `AUTHOR`, or `READER`, and `created_at TIMESTAMP DEFAULT now()`. |
-| `posts` | `post_id BIGSERIAL` primary key and `author_id BIGINT` foreign key to `users`. `title VARCHAR(200)` must be nonblank after trimming. Also includes `body TEXT`, `created_at TIMESTAMP DEFAULT now()`, and `updated_at TIMESTAMP DEFAULT now()`. The DAO sets `updated_at` on edits. |
-| `tags` | `tag_id BIGSERIAL` primary key and unique `name VARCHAR(50)`. The app trims and lowercases names. |
+| `users` | `user_id BIGSERIAL` primary key. Unique `username VARCHAR(50)` and `email VARCHAR(255)`. `password_hash VARCHAR(64)` stores a SHA-256 hex digest. Also includes `display_name VARCHAR(100)`, `role VARCHAR(10)` restricted to `ADMIN`, `AUTHOR`, or `READER`, `active BOOLEAN DEFAULT TRUE`, and `created_at TIMESTAMP DEFAULT now()`. |
+| `posts` | `post_id BIGSERIAL` primary key and `author_id BIGINT` foreign key to `users`. `title VARCHAR(200)` must be nonblank after trimming. Also includes `body TEXT`, `created_at TIMESTAMP DEFAULT now()`, `updated_at TIMESTAMP DEFAULT now()`, and nullable `deleted_at TIMESTAMPTZ`. The DAO sets `updated_at` on edits. |
+| `tags` | `tag_id BIGSERIAL` primary key, unique `name VARCHAR(50)`, and nullable `deleted_at TIMESTAMPTZ`. The app trims and lowercases names. |
 | `post_tags` | `post_id BIGINT` and `tag_id BIGINT` reference `posts` and `tags`. Their composite primary key prevents duplicate assignments. |
 
-Foreign keys cascade on delete. Deleting a post or tag removes its rows from `post_tags`. Deleting a user in PostgreSQL cascades to their posts and their posts’ tag links. When the app deletes a post, the service removes its MongoDB comments and reviews before deleting the SQL row. Those writes span two databases and run as separate operations.
+The application moves posts and tags to Trash by setting `deleted_at`. Ordinary queries exclude archived rows. Tag links, comments, and reviews are retained. Restoring a post makes its active comments and reviews visible again. A comment moved to Trash on its own has a separate deletion timestamp.
+
+Existing installations can apply the [account status upgrade](../db/postgres/upgrade-account-status.sql) and [Trash upgrade](../db/postgres/upgrade-trash.sql) without reinitializing the schema.
 
 ### Normalization
 
@@ -46,6 +48,7 @@ Foreign keys cascade on delete. Deleting a post or tag removes its rows from `po
 | `idx_posts_created_at` | Read the newest posts in order. |
 | Primary-key and unique indexes | Cover ID lookups and enforce uniqueness for tag names, usernames, and emails. |
 | `uq_posts_normalized_title` | Enforces unique titles in fresh databases by comparing lowercase titles with surrounding spaces removed. |
+| `idx_posts_archived` | Partial index for posts in Trash, ordered by their archive timestamp. |
 
 ## MongoDB document model
 
@@ -53,7 +56,7 @@ The [MongoDB setup script](../db/mongo/setup.js) defines collection validators a
 
 | Collection | Document fields | Index |
 |---|---|---|
-| `comments` | `_id` (ObjectId), `postId` and `authorId` (BSON long), `authorName` (string), nonempty `body` (string), `createdAt` (date). | `{ postId: 1, createdAt: 1 }` loads comments in chronological order. |
+| `comments` | `_id` (ObjectId), `postId` and `authorId` (BSON long), `authorName` (string), nonempty `body` (string), `createdAt` (date), and optional `deletedAt` (date). | `{ postId: 1, createdAt: 1 }` loads comments in chronological order. |
 | `reviews` | `_id` (ObjectId), `postId` and `reviewerId` (BSON long), `reviewerName` (string), `rating` (integer 1–5), optional `text` (string), `createdAt` (date). | Unique `{ postId: 1, reviewerId: 1 }` enforces one review per user per post. |
 
-PostgreSQL uses foreign keys and transactions for authorship and tag assignments. MongoDB keeps each comment or review and its display name in one document, with `$jsonSchema` enforcing the expected types. Keeping all entities in SQL would allow foreign keys from comments and reviews to posts and users. The split model handles those references and post deletion in the application.
+PostgreSQL uses foreign keys and transactions for authorship and tag assignments. MongoDB keeps each comment or review and its display name in one document, with `$jsonSchema` enforcing the expected types. The app checks the parent post before accepting a comment or review, and restoring a post only changes its PostgreSQL row.
