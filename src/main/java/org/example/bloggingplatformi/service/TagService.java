@@ -2,6 +2,7 @@ package org.example.bloggingplatformi.service;
 
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 import org.example.bloggingplatformi.dao.TagDao;
@@ -26,7 +27,10 @@ public class TagService {
         if (name == null || name.isBlank()) {
             throw new ValidationException("Please type a tag name.");
         }
-        String clean = name.strip().toLowerCase();
+        String clean = name.strip().toLowerCase(Locale.ROOT);
+        if (clean.codePointCount(0, clean.length()) > 50) {
+            throw new ValidationException("Use 50 characters or fewer for the tag name.");
+        }
 
         // The list is sorted, so binary search can tell quickly if the name is already used.
         if (Sorting.binarySearch(findAll(), new Tag(0, clean), BY_NAME) >= 0) {

@@ -4,12 +4,15 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Types;
 import java.util.ArrayList;
 import java.util.List;
 
 import org.example.bloggingplatformi.db.Database;
 import org.example.bloggingplatformi.exception.DatabaseException;
+import org.example.bloggingplatformi.exception.ValidationException;
 import org.example.bloggingplatformi.model.Post;
+import org.postgresql.util.PSQLException;
 
 /** Reads and writes the posts table (and the post_tags links) with JDBC. */
 public class PostDao {
@@ -45,7 +48,7 @@ public class PostDao {
     public List<Post> search(String keyword, Long authorId, Long tagId, int limit, int offset) {
         List<Object> values = new ArrayList<>();
         String sql = SELECT_POSTS + " WHERE 1 = 1" + filters(keyword, authorId, tagId, values)
-                + " ORDER BY p.created_at DESC LIMIT ? OFFSET ?";
+                + " ORDER BY p.created_at DESC, p.post_id DESC LIMIT ? OFFSET ?";
         values.add(limit);
         values.add(offset);
 
@@ -88,8 +91,9 @@ public class PostDao {
         String sql = "";
         if (keyword != null && !keyword.isBlank()) {
             sql += " AND (p.title ILIKE ? OR p.body ILIKE ?)";
-            values.add("%" + keyword.strip() + "%");
-            values.add("%" + keyword.strip() + "%");
+            String pattern = "%" + keyword.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%";
+            values.add(pattern);
+            values.add(pattern);
         }
         if (authorId != null) {
             sql += " AND p.author_id = ?";
@@ -114,6 +118,7 @@ public class PostDao {
             Connection connection = Database.connection();
             connection.setAutoCommit(false); // start the transaction
             try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                checkUniqueTitle(connection, title, null);
                 statement.setLong(1, authorId);
                 statement.setString(2, title);
                 statement.setString(3, body);
@@ -125,14 +130,14 @@ public class PostDao {
                 Post saved = findById(connection, postId);
                 connection.commit();     // save everything
                 return saved;
-            } catch (SQLException e) {
+            } catch (SQLException | RuntimeException e) {
                 connection.rollback();   // undo everything
                 throw e;
             } finally {
                 connection.setAutoCommit(true); // back to normal: each query saved at once
             }
         } catch (SQLException e) {
-            throw new DatabaseException("Could not save the post", e);
+            throw postWriteError("Could not save the post", e);
         }
     }
 
@@ -145,6 +150,7 @@ public class PostDao {
             connection.setAutoCommit(false);
             try (PreparedStatement statement = connection.prepareStatement(sql);
                  PreparedStatement removeTags = connection.prepareStatement("DELETE FROM post_tags WHERE post_id = ?")) {
+                checkUniqueTitle(connection, title, postId);
                 statement.setString(1, title);
                 statement.setString(2, body);
                 statement.setLong(3, postId);
@@ -158,15 +164,47 @@ public class PostDao {
                 Post saved = findById(connection, postId);
                 connection.commit();
                 return saved;
-            } catch (SQLException e) {
+            } catch (SQLException | RuntimeException e) {
                 connection.rollback();
                 throw e;
             } finally {
                 connection.setAutoCommit(true);
             }
         } catch (SQLException e) {
-            throw new DatabaseException("Could not update the post", e);
+            throw postWriteError("Could not update the post", e);
         }
+    }
+
+    private void checkUniqueTitle(Connection connection, String title, Long postId) throws SQLException {
+        // Lock only this normalized title so older databases also reject concurrent duplicate saves.
+        try (PreparedStatement lock = connection.prepareStatement(
+                "SELECT pg_advisory_xact_lock(10553, hashtext(lower(btrim(?))))")) {
+            lock.setString(1, title);
+            lock.execute();
+        }
+        try (PreparedStatement check = connection.prepareStatement(
+                "SELECT 1 FROM posts WHERE lower(btrim(title)) = lower(btrim(?)) AND post_id IS DISTINCT FROM ? LIMIT 1")) {
+            check.setString(1, title);
+            check.setObject(2, postId, Types.BIGINT);
+            try (ResultSet rows = check.executeQuery()) {
+                if (rows.next()) {
+                    throw duplicateTitle();
+                }
+            }
+        }
+    }
+
+    private RuntimeException postWriteError(String message, SQLException error) {
+        if (error instanceof PSQLException postgresError && "23505".equals(error.getSQLState())
+                && postgresError.getServerErrorMessage() != null
+                && "uq_posts_normalized_title".equals(postgresError.getServerErrorMessage().getConstraint())) {
+            return duplicateTitle();
+        }
+        return new DatabaseException(message, error);
+    }
+
+    private ValidationException duplicateTitle() {
+        return new ValidationException("title", "That title is already in use. Choose a different title.");
     }
 
     private void saveTags(Connection connection, long postId, List<Long> tagIds) throws SQLException {

@@ -43,7 +43,7 @@ Use environment variables to override the defaults in [application.properties](s
 
 | Feature | Behavior |
 |---|---|
-| Posts | Create, edit, or delete posts with a title, body, and optional tags selected from the existing catalog. |
+| Posts | Create, edit, or delete posts with a unique title, body, and optional tags selected from the existing catalog. Titles are compared without case or surrounding spaces. |
 | Discovery | Search titles and bodies without matching case. Filter by author or tag and browse 10 posts per page in newest-first order. |
 | Comments | Read and add comments. Edit or delete your own comments. |
 | Reviews | Submit a 1–5 rating with optional text, once per user per post. See the average on the post detail screen. |
@@ -51,6 +51,8 @@ Use environment variables to override the defaults in [application.properties](s
 | Administration | List accounts and create or delete tags. |
 
 Readers can browse, comment, and review. Bloggers can also create posts and edit or delete their own posts. Admins can edit or delete any post or comment and can access **Tags** and **Users**.
+
+The app checks title uniqueness when saving against an existing database. If older posts already share a title, give them distinct titles in the editor. Fresh databases also enforce uniqueness with a PostgreSQL index.
 
 ## Screenshots
 

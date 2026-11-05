@@ -21,12 +21,14 @@
             <VBox spacing="6">
                 <Label text="Title" styleClass="field-label"/>
                 <TextField fx:id="titleField" promptText="Give your post a title" accessibleText="Post title"/>
+                <Label fx:id="titleError" styleClass="error-text" wrapText="true" managed="${titleError.visible}"/>
             </VBox>
 
             <VBox spacing="6">
                 <Label text="Post content" styleClass="field-label"/>
                 <TextArea fx:id="bodyArea" promptText="Write your post…" accessibleText="Post content"
                           prefRowCount="10" wrapText="true"/>
+                <Label fx:id="bodyError" styleClass="error-text" wrapText="true" managed="${bodyError.visible}"/>
             </VBox>
 
             <VBox spacing="8" styleClass="form-section">
@@ -39,8 +41,6 @@
                     <FlowPane fx:id="tagChoices" hgap="8" vgap="8"/>
                 </ScrollPane>
             </VBox>
-
-            <Label fx:id="errorLabel" styleClass="error-text" wrapText="true" managed="${errorLabel.visible}"/>
 
             <HBox spacing="10" alignment="CENTER_RIGHT">
                 <Button text="Cancel" onAction="#cancel"/>

@@ -1,6 +1,7 @@
 package org.example.bloggingplatformi.service;
 
 import java.util.List;
+import java.util.regex.Pattern;
 
 import org.example.bloggingplatformi.dao.UserDao;
 import org.example.bloggingplatformi.exception.ValidationException;
@@ -10,6 +11,8 @@ import org.example.bloggingplatformi.util.Passwords;
 
 /** Sign up, sign in, and the list of accounts. */
 public class UserService {
+
+    private static final Pattern EMAIL = Pattern.compile("[^\\s@]+@[^\\s@.]+(?:\\.[^\\s@.]+)+");
 
     private final UserDao userDao = new UserDao();
 
@@ -21,16 +24,22 @@ public class UserService {
         if (displayName == null || displayName.isBlank()) {
             throw new ValidationException("Please enter your name.");
         }
+        if (displayName.strip().length() > 100) {
+            throw new ValidationException("Use 100 characters or fewer for your name.");
+        }
         if (username == null || username.strip().length() < 3) {
             throw new ValidationException("The username needs at least 3 characters.");
         }
-        if (email == null || !email.contains("@")) {
+        if (username.strip().length() > 50) {
+            throw new ValidationException("Use 50 characters or fewer for the username.");
+        }
+        if (email == null || email.strip().length() > 255 || !EMAIL.matcher(email.strip()).matches()) {
             throw new ValidationException("Please enter a valid email address.");
         }
         if (password == null || password.length() < 6) {
             throw new ValidationException("The password needs at least 6 characters.");
         }
-        if (role == Role.ADMIN) {
+        if (role == null || role == Role.ADMIN) {
             throw new ValidationException("You can only sign up as a blogger or a reader.");
         }
         if (userDao.usernameExists(username.strip())) {

@@ -33,7 +33,8 @@ public class PostListController {
 
     private int page = 0;      // the page shown now, starting at 0
     private int totalPages = 1;
-    private boolean clearingFilters;
+    private boolean updatingFilters;
+    private String appliedKeyword = "";
 
     @FXML private TextField searchField;
     @FXML private ComboBox<User> authorBox;
@@ -45,6 +46,7 @@ public class PostListController {
     @FXML private Button previousButton;
     @FXML private Button nextButton;
     @FXML private Label pageLabel;
+    @FXML private Label resultCount;
 
     public PostListController(MainController main) {
         this.main = main;
@@ -61,8 +63,7 @@ public class PostListController {
         newButton.managedProperty().bind(newButton.visibleProperty());
 
         try {
-            authorBox.getItems().setAll(userService.findAuthors());
-            tagBox.getItems().setAll(tagService.findAll());
+            reloadFilters();
             showFilterValue(authorBox);
             showFilterValue(tagBox);
             authorBox.valueProperty().addListener((observable, previous, current) -> search());
@@ -83,45 +84,61 @@ public class PostListController {
         });
     }
 
-    /** Reads the current page from the database with the current filters. */
-    private List<Post> loadPage() {
-        String keyword = searchField.getText();
+    void refresh() {
+        try {
+            reloadFilters();
+            loadPage();
+        } catch (RuntimeException e) {
+            Dialogs.error("Could not refresh the posts: " + e.getMessage());
+        }
+    }
+
+    private void reloadFilters() {
+        updatingFilters = true;
+        try {
+            replaceOptions(authorBox, userService.findAuthors());
+            replaceOptions(tagBox, tagService.findAll());
+        } finally {
+            updatingFilters = false;
+        }
+    }
+
+    private <T> void replaceOptions(ComboBox<T> filter, List<T> options) {
+        T selected = filter.getValue();
+        filter.getItems().setAll(options);
+        filter.setValue(selected != null && options.contains(selected) ? selected : null);
+    }
+
+    /** Reads the current page from the database with the applied filters. */
+    private void loadPage() {
         Long authorId = authorBox.getValue() == null ? null : authorBox.getValue().id();
         Long tagId = tagBox.getValue() == null ? null : tagBox.getValue().id();
 
-        totalPages = postService.countPages(keyword, authorId, tagId);
+        int matches = postService.countMatches(appliedKeyword, authorId, tagId);
+        totalPages = Math.max(1, (matches + PostService.PAGE_SIZE - 1) / PostService.PAGE_SIZE);
         page = Math.min(page, totalPages - 1);
-        List<Post> posts = postService.search(keyword, authorId, tagId, page);
+        List<Post> posts = postService.search(appliedKeyword, authorId, tagId, page);
         postCards.getChildren().setAll(posts.stream().map(main::postCard).toList());
-        resultsScroll.setVvalue(0);
         emptyResults.setVisible(posts.isEmpty());
+        resultCount.setText(matches + (matches == 1 ? " article" : " articles"));
 
         pageLabel.setText("Page " + (page + 1) + " of " + totalPages);
         previousButton.setDisable(page == 0);
         nextButton.setDisable(page >= totalPages - 1);
-        return posts;
-    }
-
-    @FXML
-    private void searchOnEnter() {
-        page = 0;
-        List<Post> posts = loadPage();
-        if (!searchField.getText().isBlank() && posts.size() == 1) {
-            main.showPost(posts.getFirst().id());
-        }
     }
 
     @FXML
     private void search() {
-        if (!clearingFilters) {
+        if (!updatingFilters) {
+            appliedKeyword = searchField.getText().strip();
             page = 0;
-            loadPage();
+            showPage();
         }
     }
 
     @FXML
     private void clearFilters() {
-        clearingFilters = true;
+        updatingFilters = true;
         try {
             searchField.clear();
             authorBox.getSelectionModel().clearSelection();
@@ -129,7 +146,7 @@ public class PostListController {
             authorBox.setValue(null);
             tagBox.setValue(null);
         } finally {
-            clearingFilters = false;
+            updatingFilters = false;
         }
         search();
         searchField.requestFocus();
@@ -138,13 +155,22 @@ public class PostListController {
     @FXML
     private void previousPage() {
         page--;
-        loadPage();
+        showPage();
     }
 
     @FXML
     private void nextPage() {
         page++;
-        loadPage();
+        showPage();
+    }
+
+    private void showPage() {
+        try {
+            loadPage();
+            resultsScroll.setVvalue(0);
+        } catch (RuntimeException e) {
+            Dialogs.error("Could not load the posts: " + e.getMessage());
+        }
     }
 
     @FXML

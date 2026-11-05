@@ -27,6 +27,7 @@ public class MainController {
 
     private final Runnable onSignOut;
     private final Parent root;
+    private PostListController postList;
 
     @FXML private Button tagsButton;
     @FXML private Button usersButton;
@@ -77,7 +78,12 @@ public class MainController {
 
     @FXML
     public void showPosts() {
-        show("Posts", new PostListController(this).getRoot(), postsButton);
+        if (postList == null) {
+            postList = new PostListController(this);
+        } else {
+            postList.refresh();
+        }
+        show("Posts", postList.getRoot(), postsButton);
     }
 
     public void showPost(long postId) {

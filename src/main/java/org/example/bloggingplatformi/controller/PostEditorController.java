@@ -34,7 +34,8 @@ public class PostEditorController {
     @FXML private TextArea bodyArea;
     @FXML private FlowPane tagChoices;
     @FXML private Label noTagsLabel;
-    @FXML private Label errorLabel;
+    @FXML private Label titleError;
+    @FXML private Label bodyError;
 
     public PostEditorController(MainController main, Long postId) {
         this.main = main;
@@ -49,7 +50,10 @@ public class PostEditorController {
     /** When editing, fill the form with the post. */
     @FXML
     private void initialize() {
-        errorLabel.visibleProperty().bind(errorLabel.textProperty().isNotEmpty());
+        titleError.visibleProperty().bind(titleError.textProperty().isNotEmpty());
+        bodyError.visibleProperty().bind(bodyError.textProperty().isNotEmpty());
+        titleField.textProperty().addListener((observable, before, after) -> titleError.setText(""));
+        bodyArea.textProperty().addListener((observable, before, after) -> bodyError.setText(""));
         List<Tag> assignedTags = List.of();
         if (postId != null) {
             Post post = postService.findById(postId);
@@ -84,7 +88,13 @@ public class PostEditorController {
                 main.showPost(postId);
             }
         } catch (ValidationException e) {
-            errorLabel.setText(e.getMessage()); // wrong input: show it under the form
+            if ("title".equals(e.field())) {
+                titleError.setText(e.getMessage());
+                titleField.requestFocus();
+            } else {
+                bodyError.setText(e.getMessage());
+                bodyArea.requestFocus();
+            }
         } catch (RuntimeException e) {
             Dialogs.error("Could not save the post: " + e.getMessage());
         }

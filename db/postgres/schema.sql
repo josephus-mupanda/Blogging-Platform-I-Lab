@@ -33,6 +33,8 @@ CREATE TABLE posts (
     updated_at TIMESTAMP    NOT NULL DEFAULT now()
 );
 
+CREATE UNIQUE INDEX uq_posts_normalized_title ON posts (lower(btrim(title)));
+
 -- One row per tag name, for example "java".
 CREATE TABLE tags (
     tag_id BIGSERIAL   PRIMARY KEY,

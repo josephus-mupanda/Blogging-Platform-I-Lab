@@ -21,7 +21,7 @@
     <VBox spacing="12" styleClass="card">
         <HBox spacing="10" alignment="CENTER_LEFT">
             <TextField fx:id="searchField" promptText="Search titles and post content"
-                       accessibleText="Search posts" onAction="#searchOnEnter" HBox.hgrow="ALWAYS"/>
+                       accessibleText="Search posts" onAction="#search" HBox.hgrow="ALWAYS"/>
             <Button text="Search" styleClass="primary" onAction="#search"/>
         </HBox>
         <FlowPane hgap="10" vgap="8" rowValignment="CENTER">
@@ -31,6 +31,8 @@
             <Button text="Clear filters" styleClass="link" onAction="#clearFilters"/>
         </FlowPane>
     </VBox>
+
+    <Label fx:id="resultCount" styleClass="small"/>
 
     <ScrollPane fx:id="resultsScroll" fitToWidth="true" hbarPolicy="NEVER" styleClass="content-scroll" VBox.vgrow="ALWAYS">
         <VBox>

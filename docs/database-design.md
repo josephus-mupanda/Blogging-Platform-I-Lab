@@ -45,6 +45,7 @@ Foreign keys cascade on delete. Deleting a post or tag removes its rows from `po
 | `idx_post_tags_tag_id` | Find posts for a tag. The composite primary key starts with `post_id`. |
 | `idx_posts_created_at` | Read the newest posts in order. |
 | Primary-key and unique indexes | Cover ID lookups and enforce uniqueness for tag names, usernames, and emails. |
+| `uq_posts_normalized_title` | Enforces unique titles in fresh databases by comparing lowercase titles with surrounding spaces removed. |
 
 ## MongoDB document model
 

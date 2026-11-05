@@ -44,9 +44,8 @@ public class PostService {
         return postDao.search(keyword, authorId, tagId, PAGE_SIZE, page * PAGE_SIZE);
     }
 
-    public int countPages(String keyword, Long authorId, Long tagId) {
-        int posts = postDao.count(keyword, authorId, tagId);
-        return Math.max(1, (posts + PAGE_SIZE - 1) / PAGE_SIZE); // round up, and at least 1 page
+    public int countMatches(String keyword, Long authorId, Long tagId) {
+        return postDao.count(keyword, authorId, tagId);
     }
 
     public List<Post> latest(int howMany) {
@@ -93,13 +92,13 @@ public class PostService {
 
     private void validate(String title, String body) {
         if (title == null || title.isBlank()) {
-            throw new ValidationException("A post needs a title.");
+            throw new ValidationException("title", "A post needs a title.");
         }
         if (title.strip().length() > 200) {
-            throw new ValidationException("The title can have at most 200 characters.");
+            throw new ValidationException("title", "Use 200 characters or fewer for the title.");
         }
         if (body == null || body.isBlank()) {
-            throw new ValidationException("A post needs some text.");
+            throw new ValidationException("body", "A post needs some text.");
         }
     }
 
