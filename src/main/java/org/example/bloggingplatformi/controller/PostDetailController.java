@@ -35,6 +35,7 @@ import org.example.bloggingplatformi.ui.Dates;
 import org.example.bloggingplatformi.ui.Dialogs;
 import org.example.bloggingplatformi.ui.Fxml;
 import org.example.bloggingplatformi.ui.Session;
+import org.example.bloggingplatformi.ui.TagChips;
 
 /** Controller of post-detail.fxml: one post with its comments and reviews. */
 public class PostDetailController {
@@ -149,9 +150,8 @@ public class PostDetailController {
     private void showPost() {
         Post post = postService.findById(postId); // from the cache if it is there
         for (Tag tag : postService.tagsOf(postId)) {
-            Label chip = new Label(tag.name());
-            chip.getStyleClass().add("tag-chip");
-            postTags.getChildren().add(chip);
+            postTags.getChildren().add(TagChips.link(tag.name(), "Browse posts tagged " + tag.name(),
+                    () -> main.showPostsForTag(tag)));
         }
         postTags.setVisible(!postTags.getChildren().isEmpty());
         titleLabel.setText(post.title());

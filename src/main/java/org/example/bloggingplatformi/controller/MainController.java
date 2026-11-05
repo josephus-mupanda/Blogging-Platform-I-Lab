@@ -13,6 +13,7 @@ import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 
 import org.example.bloggingplatformi.model.Post;
+import org.example.bloggingplatformi.model.Tag;
 import org.example.bloggingplatformi.model.User;
 import org.example.bloggingplatformi.ui.Dates;
 import org.example.bloggingplatformi.ui.Dialogs;
@@ -28,6 +29,7 @@ public class MainController {
     private final Runnable onSignOut;
     private final Parent root;
     private PostListController postList;
+    private PostEditorController editor;
 
     @FXML private Button tagsButton;
     @FXML private Button usersButton;
@@ -63,6 +65,7 @@ public class MainController {
 
     /** Puts a screen in the middle of the window. */
     private void show(String title, Parent screen, Button activeButton) {
+        editor = null;
         screenTitle.setText(title);
         content.getChildren().setAll(screen);
         for (Button button : new Button[] {dashboardButton, postsButton, tagsButton, usersButton}) {
@@ -73,21 +76,35 @@ public class MainController {
 
     @FXML
     public void showDashboard() {
-        show("Dashboard", new DashboardController(this).getRoot(), dashboardButton);
+        if (confirmDiscardDraft()) {
+            show("Dashboard", new DashboardController(this).getRoot(), dashboardButton);
+        }
     }
 
     @FXML
     public void showPosts() {
+        showPostsForTag(null);
+    }
+
+    void showPostsForTag(Tag tag) {
+        if (!confirmDiscardDraft()) {
+            return;
+        }
         if (postList == null) {
             postList = new PostListController(this);
-        } else {
+        } else if (tag == null) {
             postList.refresh();
+        }
+        if (tag != null) {
+            postList.filterByTag(tag);
         }
         show("Posts", postList.getRoot(), postsButton);
     }
 
     public void showPost(long postId) {
-        show("Post", new PostDetailController(this, postId).getRoot(), postsButton);
+        if (confirmDiscardDraft()) {
+            show("Post", new PostDetailController(this, postId).getRoot(), postsButton);
+        }
     }
 
     Button postCard(Post post) {
@@ -130,22 +147,41 @@ public class MainController {
 
     /** postId = null for a new post. */
     public void showEditor(Long postId) {
-        show(postId == null ? "New post" : "Edit post", new PostEditorController(this, postId).getRoot(), postsButton);
+        if (confirmDiscardDraft()) {
+            try {
+                PostEditorController next = new PostEditorController(this, postId);
+                show(postId == null ? "New post" : "Edit post", next.getRoot(), postsButton);
+                editor = next;
+            } catch (RuntimeException e) {
+                Dialogs.error("Could not open the post editor: " + e.getMessage());
+            }
+        }
     }
 
     @FXML
     public void showTags() {
-        show("Tags", new TagsController().getRoot(), tagsButton);
+        if (confirmDiscardDraft()) {
+            show("Tags", new TagsController(this).getRoot(), tagsButton);
+        }
     }
 
     @FXML
     public void showUsers() {
-        show("Users", new UsersController().getRoot(), usersButton);
+        if (confirmDiscardDraft()) {
+            show("Users", new UsersController().getRoot(), usersButton);
+        }
+    }
+
+    public boolean confirmDiscardDraft() {
+        return editor == null || !editor.hasChanges()
+                || Dialogs.confirm("Discard changes?", "Changes to this draft will be lost.", "Discard changes", true);
     }
 
     @FXML
     private void signOut() {
-        if (Dialogs.confirm("Sign out?", "You can sign in again at any time.", "Sign out", false)) {
+        boolean hasDraft = editor != null && editor.hasChanges();
+        String message = hasDraft ? "Changes to this draft will be lost." : "You can sign in again at any time.";
+        if (Dialogs.confirm("Sign out?", message, "Sign out", hasDraft)) {
             onSignOut.run();
         }
     }

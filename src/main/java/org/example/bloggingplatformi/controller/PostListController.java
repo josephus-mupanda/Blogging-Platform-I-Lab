@@ -10,6 +10,7 @@ import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TextField;
+import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.VBox;
 
 import org.example.bloggingplatformi.model.Post;
@@ -21,6 +22,7 @@ import org.example.bloggingplatformi.service.UserService;
 import org.example.bloggingplatformi.ui.Dialogs;
 import org.example.bloggingplatformi.ui.Fxml;
 import org.example.bloggingplatformi.ui.Session;
+import org.example.bloggingplatformi.ui.TagChips;
 
 /** Controller of post-list.fxml: search, filter, page through and manage posts. */
 public class PostListController {
@@ -47,6 +49,8 @@ public class PostListController {
     @FXML private Button nextButton;
     @FXML private Label pageLabel;
     @FXML private Label resultCount;
+    @FXML private Label filterNotice;
+    @FXML private FlowPane activeTag;
 
     public PostListController(MainController main) {
         this.main = main;
@@ -59,6 +63,7 @@ public class PostListController {
 
     @FXML
     private void initialize() {
+        filterNotice.visibleProperty().bind(filterNotice.textProperty().isNotEmpty());
         newButton.setVisible(Session.canWritePosts());
         newButton.managedProperty().bind(newButton.visibleProperty());
 
@@ -66,8 +71,8 @@ public class PostListController {
             reloadFilters();
             showFilterValue(authorBox);
             showFilterValue(tagBox);
-            authorBox.valueProperty().addListener((observable, previous, current) -> search());
-            tagBox.valueProperty().addListener((observable, previous, current) -> search());
+            authorBox.valueProperty().addListener((observable, previous, current) -> applyFilters());
+            tagBox.valueProperty().addListener((observable, previous, current) -> applyFilters());
             loadPage();
         } catch (RuntimeException e) {
             Dialogs.error("Could not load the posts: " + e.getMessage());
@@ -112,7 +117,8 @@ public class PostListController {
     /** Reads the current page from the database with the applied filters. */
     private void loadPage() {
         Long authorId = authorBox.getValue() == null ? null : authorBox.getValue().id();
-        Long tagId = tagBox.getValue() == null ? null : tagBox.getValue().id();
+        Tag tag = tagBox.getValue();
+        Long tagId = tag == null ? null : tag.id();
 
         int matches = postService.countMatches(appliedKeyword, authorId, tagId);
         totalPages = Math.max(1, (matches + PostService.PAGE_SIZE - 1) / PostService.PAGE_SIZE);
@@ -121,6 +127,12 @@ public class PostListController {
         postCards.getChildren().setAll(posts.stream().map(main::postCard).toList());
         emptyResults.setVisible(posts.isEmpty());
         resultCount.setText(matches + (matches == 1 ? " article" : " articles"));
+        activeTag.getChildren().clear();
+        if (tag != null) {
+            activeTag.getChildren().add(TagChips.removable(new Label(tag.name()), "Remove tag filter " + tag.name(),
+                    this::clearTagFilter));
+        }
+        activeTag.setVisible(tag != null);
 
         pageLabel.setText("Page " + (page + 1) + " of " + totalPages);
         previousButton.setDisable(page == 0);
@@ -129,8 +141,13 @@ public class PostListController {
 
     @FXML
     private void search() {
+        appliedKeyword = searchField.getText().strip();
+        applyFilters();
+    }
+
+    private void applyFilters() {
         if (!updatingFilters) {
-            appliedKeyword = searchField.getText().strip();
+            filterNotice.setText("");
             page = 0;
             showPage();
         }
@@ -138,18 +155,46 @@ public class PostListController {
 
     @FXML
     private void clearFilters() {
+        resetFilters(null);
+        searchField.requestFocus();
+    }
+
+    private void clearTagFilter() {
+        updatingFilters = true;
+        try {
+            tagBox.getSelectionModel().clearSelection();
+            tagBox.setValue(null);
+        } finally {
+            updatingFilters = false;
+        }
+        applyFilters();
+        tagBox.requestFocus();
+    }
+
+    void filterByTag(Tag tag) {
+        try {
+            reloadFilters();
+            resetFilters(tagBox.getItems().contains(tag) ? tag : null);
+            if (!tagBox.getItems().contains(tag)) {
+                filterNotice.setText("This tag is no longer available. Showing all posts.");
+            }
+        } catch (RuntimeException e) {
+            Dialogs.error("Could not load this tag: " + e.getMessage());
+        }
+    }
+
+    private void resetFilters(Tag tag) {
         updatingFilters = true;
         try {
             searchField.clear();
             authorBox.getSelectionModel().clearSelection();
             tagBox.getSelectionModel().clearSelection();
             authorBox.setValue(null);
-            tagBox.setValue(null);
+            tagBox.setValue(tag);
         } finally {
             updatingFilters = false;
         }
         search();
-        searchField.requestFocus();
     }
 
     @FXML

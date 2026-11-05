@@ -41,20 +41,12 @@ public class TagDao {
         }
     }
 
-    /**
-     * Returns the id of the tag with this name, and creates the tag first if it does not exist.
-     * ON CONFLICT DO NOTHING: if the name is already there, the INSERT does nothing.
-     */
-    public long findOrCreate(String name) {
+    /** Returns false if another tag already uses this name. */
+    public boolean insert(String name) {
         try (PreparedStatement insert = Database.connection().prepareStatement(
-                     "INSERT INTO tags (name) VALUES (?) ON CONFLICT (name) DO NOTHING");
-             PreparedStatement select = Database.connection().prepareStatement("SELECT tag_id FROM tags WHERE name = ?")) {
+                "INSERT INTO tags (name) VALUES (?) ON CONFLICT (name) DO NOTHING")) {
             insert.setString(1, name);
-            insert.executeUpdate();
-            select.setString(1, name);
-            ResultSet rows = select.executeQuery();
-            rows.next();
-            return rows.getLong(1);
+            return insert.executeUpdate() == 1;
         } catch (SQLException e) {
             throw new DatabaseException("Could not save the tag", e);
         }

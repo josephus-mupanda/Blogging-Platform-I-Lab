@@ -195,10 +195,14 @@ public class PostDao {
     }
 
     private RuntimeException postWriteError(String message, SQLException error) {
-        if (error instanceof PSQLException postgresError && "23505".equals(error.getSQLState())
-                && postgresError.getServerErrorMessage() != null
-                && "uq_posts_normalized_title".equals(postgresError.getServerErrorMessage().getConstraint())) {
-            return duplicateTitle();
+        if (error instanceof PSQLException postgresError && postgresError.getServerErrorMessage() != null) {
+            String constraint = postgresError.getServerErrorMessage().getConstraint();
+            if ("23505".equals(error.getSQLState()) && "uq_posts_normalized_title".equals(constraint)) {
+                return duplicateTitle();
+            }
+            if ("23503".equals(error.getSQLState()) && "post_tags_tag_id_fkey".equals(constraint)) {
+                return new ValidationException("tags", "A selected tag was deleted. Review your tags and save again.");
+            }
         }
         return new DatabaseException(message, error);
     }

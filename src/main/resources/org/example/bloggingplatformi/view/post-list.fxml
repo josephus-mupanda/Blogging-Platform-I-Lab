@@ -30,6 +30,8 @@
             <ComboBox fx:id="tagBox" promptText="All tags" accessibleText="Filter by tag" prefWidth="145"/>
             <Button text="Clear filters" styleClass="link" onAction="#clearFilters"/>
         </FlowPane>
+        <FlowPane fx:id="activeTag" hgap="8" vgap="8" visible="false" managed="${activeTag.visible}"/>
+        <Label fx:id="filterNotice" styleClass="small" wrapText="true" managed="${filterNotice.visible}"/>
     </VBox>
 
     <Label fx:id="resultCount" styleClass="small"/>

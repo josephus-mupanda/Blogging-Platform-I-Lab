@@ -33,10 +33,9 @@ public class TagService {
         }
 
         // The list is sorted, so binary search can tell quickly if the name is already used.
-        if (Sorting.binarySearch(findAll(), new Tag(0, clean), BY_NAME) >= 0) {
+        if (Sorting.binarySearch(findAll(), new Tag(0, clean), BY_NAME) >= 0 || !tagDao.insert(clean)) {
             throw new ValidationException("The tag \"" + clean + "\" already exists.");
         }
-        tagDao.findOrCreate(clean);
     }
 
     public void delete(long tagId) {

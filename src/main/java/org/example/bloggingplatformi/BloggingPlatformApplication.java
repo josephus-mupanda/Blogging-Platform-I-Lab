@@ -20,6 +20,7 @@ import org.example.bloggingplatformi.ui.Session;
 public class BloggingPlatformApplication extends Application {
 
     private Scene scene;
+    private MainController mainController;
 
     @Override
     public void start(Stage stage) {
@@ -28,6 +29,11 @@ public class BloggingPlatformApplication extends Application {
 
         stage.setTitle("Blogfold - Smart Blogging Platform");
         stage.setScene(scene);
+        stage.setOnCloseRequest(event -> {
+            if (mainController != null && !mainController.confirmDiscardDraft()) {
+                event.consume();
+            }
+        });
 
         // Size the whole window, including its title bar, to the desktop area above the taskbar.
         Rectangle2D workArea = Screen.getPrimary().getVisualBounds();
@@ -43,12 +49,14 @@ public class BloggingPlatformApplication extends Application {
     /** Called by the sign in screen with the user who signed in. */
     private void showMainWindow(User user) {
         Session.signIn(user);
-        scene.setRoot(new MainController(this::showLoginScreen).getRoot());
+        mainController = new MainController(this::showLoginScreen);
+        scene.setRoot(mainController.getRoot());
     }
 
     /** Called by the "Sign out" button. */
     private void showLoginScreen() {
         Session.signOut();
+        mainController = null;
         scene.setRoot(new LoginController(this::showMainWindow).getRoot());
     }
 

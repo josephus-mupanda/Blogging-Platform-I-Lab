@@ -1,31 +1,32 @@
 package org.example.bloggingplatformi.controller;
 
-import java.util.Map;
-
 import javafx.fxml.FXML;
 import javafx.scene.Parent;
 import javafx.scene.control.Label;
-import javafx.scene.control.ListView;
 import javafx.scene.control.TextField;
+import javafx.scene.layout.FlowPane;
 
 import org.example.bloggingplatformi.exception.ValidationException;
 import org.example.bloggingplatformi.model.Tag;
 import org.example.bloggingplatformi.service.TagService;
 import org.example.bloggingplatformi.ui.Dialogs;
 import org.example.bloggingplatformi.ui.Fxml;
+import org.example.bloggingplatformi.ui.TagChips;
 
 /** Controller of tags.fxml (admin only). */
 public class TagsController {
 
     private final TagService tagService = new TagService();
+    private final MainController main;
     private final Parent root;
 
-    @FXML private ListView<Tag> tagList;
-    @FXML private ListView<String> usageList;
+    @FXML private FlowPane tagCatalog;
+    @FXML private Label emptyCatalog;
     @FXML private TextField nameField;
     @FXML private Label errorLabel;
 
-    public TagsController() {
+    public TagsController(MainController main) {
+        this.main = main;
         this.root = Fxml.load("tags.fxml", this);
     }
 
@@ -35,16 +36,23 @@ public class TagsController {
 
     @FXML
     private void initialize() {
+        errorLabel.visibleProperty().bind(errorLabel.textProperty().isNotEmpty());
+        nameField.textProperty().addListener((observable, previous, current) -> errorLabel.setText(""));
         refresh();
     }
 
     private void refresh() {
         try {
-            tagList.getItems().setAll(tagService.findAll());
-            usageList.getItems().clear();
-            for (Map.Entry<String, Integer> tag : tagService.usage().entrySet()) {
-                usageList.getItems().add(tag.getKey() + ":  " + tag.getValue() + " posts");
-            }
+            var tags = tagService.findAll();
+            var usage = tagService.usage();
+            tagCatalog.getChildren().setAll(tags.stream().map(tag -> {
+                int count = usage.getOrDefault(tag.name(), 0);
+                String posts = count + (count == 1 ? " post" : " posts");
+                var link = TagChips.link(tag.name() + "  ·  " + count, "Browse " + posts + " tagged " + tag.name(),
+                        () -> main.showPostsForTag(tag));
+                return TagChips.removable(link, "Delete tag " + tag.name(), () -> deleteTag(tag));
+            }).toList());
+            emptyCatalog.setVisible(tags.isEmpty());
         } catch (RuntimeException e) {
             Dialogs.error("Could not load the tags: " + e.getMessage());
         }
@@ -57,22 +65,25 @@ public class TagsController {
             nameField.clear();
             errorLabel.setText("");
             refresh();
+            nameField.requestFocus();
         } catch (ValidationException e) {
             errorLabel.setText(e.getMessage());
+            nameField.requestFocus();
+        } catch (RuntimeException e) {
+            Dialogs.error("Could not add the tag: " + e.getMessage());
         }
     }
 
-    @FXML
-    private void deleteTag() {
-        Tag tag = tagList.getSelectionModel().getSelectedItem();
-        if (tag == null) {
-            errorLabel.setText("Select a tag first.");
-            return;
-        }
+    private void deleteTag(Tag tag) {
         if (Dialogs.confirm("Delete tag?", "\"" + tag.name() + "\" will be removed from its posts.", "Delete tag", true)) {
-            tagService.delete(tag.id());
-            errorLabel.setText("");
-            refresh();
+            try {
+                tagService.delete(tag.id());
+                errorLabel.setText("");
+                refresh();
+                nameField.requestFocus();
+            } catch (RuntimeException e) {
+                Dialogs.error("Could not delete the tag: " + e.getMessage());
+            }
         }
     }
 }

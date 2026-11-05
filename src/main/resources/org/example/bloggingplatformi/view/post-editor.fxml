@@ -4,6 +4,7 @@
 
 <?import javafx.geometry.Insets?>
 <?import javafx.scene.control.Button?>
+<?import javafx.scene.control.ComboBox?>
 <?import javafx.scene.control.Label?>
 <?import javafx.scene.control.ScrollPane?>
 <?import javafx.scene.control.TextArea?>
@@ -33,13 +34,13 @@
 
             <VBox spacing="8" styleClass="form-section">
                 <Label text="Tags" styleClass="subtitle"/>
-                <Label text="Select any existing tags that describe this post." styleClass="small" wrapText="true"/>
-                <Label fx:id="noTagsLabel" text="No tags are available yet." styleClass="small"
-                       visible="false" managed="${noTagsLabel.visible}"/>
-                <ScrollPane fitToWidth="true" hbarPolicy="NEVER" maxHeight="124" styleClass="content-scroll"
-                            visible="${!noTagsLabel.visible}" managed="${!noTagsLabel.visible}">
-                    <FlowPane fx:id="tagChoices" hgap="8" vgap="8"/>
-                </ScrollPane>
+                <Label text="Choose existing tags to help readers find this post." styleClass="small" wrapText="true"/>
+                <FlowPane fx:id="selectedTagsPane" hgap="8" vgap="8" managed="${selectedTagsPane.visible}"/>
+                <ComboBox fx:id="tagPicker" promptText="Add an existing tag" accessibleText="Add an existing tag"
+                          prefWidth="230" onAction="#addSelectedTag"/>
+                <Label fx:id="tagStatus" styleClass="small" wrapText="true"
+                       managed="${tagStatus.visible}"/>
+                <Label fx:id="tagError" styleClass="error-text" wrapText="true" managed="${tagError.visible}"/>
             </VBox>
 
             <HBox spacing="10" alignment="CENTER_RIGHT">

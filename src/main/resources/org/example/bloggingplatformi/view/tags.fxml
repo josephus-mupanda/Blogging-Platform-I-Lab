@@ -5,29 +5,34 @@
 <?import javafx.geometry.Insets?>
 <?import javafx.scene.control.Button?>
 <?import javafx.scene.control.Label?>
-<?import javafx.scene.control.ListView?>
+<?import javafx.scene.control.ScrollPane?>
 <?import javafx.scene.control.TextField?>
 <?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.FlowPane?>
 <?import javafx.scene.layout.VBox?>
 
-<HBox xmlns="http://javafx.com/javafx" xmlns:fx="http://javafx.com/fxml"
-      fx:controller="org.example.bloggingplatformi.controller.TagsController"
-      spacing="14">
-    <padding><Insets top="24" right="24" bottom="24" left="24"/></padding>
+<ScrollPane xmlns="http://javafx.com/javafx" xmlns:fx="http://javafx.com/fxml"
+            fx:controller="org.example.bloggingplatformi.controller.TagsController"
+            fitToWidth="true" hbarPolicy="NEVER" styleClass="content-scroll">
+    <VBox spacing="16">
+        <padding><Insets top="24" right="24" bottom="24" left="24"/></padding>
 
-    <VBox spacing="8" styleClass="card" HBox.hgrow="ALWAYS">
-        <Label text="All tags (sorted with our merge sort)" styleClass="subtitle"/>
-        <ListView fx:id="tagList" VBox.vgrow="ALWAYS"/>
-        <HBox spacing="8">
-            <TextField fx:id="nameField" promptText="New tag name" onAction="#addTag"/>
-            <Button text="Add" styleClass="primary" onAction="#addTag"/>
-            <Button text="Delete selected" styleClass="danger" onAction="#deleteTag"/>
-        </HBox>
-        <Label fx:id="errorLabel" styleClass="error-text"/>
+        <VBox spacing="10" styleClass="card">
+            <Label text="Tag library" styleClass="subtitle"/>
+            <Label text="Open a tag to see its posts. The number shows how many posts use it."
+                   styleClass="small" wrapText="true"/>
+            <FlowPane fx:id="tagCatalog" hgap="10" vgap="10"/>
+            <Label fx:id="emptyCatalog" text="No tags yet. Add one below." styleClass="small"
+                   visible="false" managed="${emptyCatalog.visible}"/>
+        </VBox>
+        <VBox spacing="8" styleClass="card">
+            <Label text="Create a tag" styleClass="subtitle"/>
+            <HBox spacing="8" alignment="CENTER_LEFT">
+                <TextField fx:id="nameField" promptText="New tag name" accessibleText="New tag name"
+                           onAction="#addTag" prefWidth="300" HBox.hgrow="ALWAYS"/>
+                <Button text="Add tag" styleClass="primary" onAction="#addTag"/>
+            </HBox>
+            <Label fx:id="errorLabel" styleClass="error-text" wrapText="true" managed="${errorLabel.visible}"/>
+        </VBox>
     </VBox>
-
-    <VBox spacing="8" styleClass="card" prefWidth="320">
-        <Label text="Posts per tag" styleClass="subtitle"/>
-        <ListView fx:id="usageList" VBox.vgrow="ALWAYS"/>
-    </VBox>
-</HBox>
+</ScrollPane>
