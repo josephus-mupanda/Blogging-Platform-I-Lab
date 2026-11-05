@@ -56,6 +56,8 @@ The app checks title uniqueness when saving against an existing database. If old
 
 ## Screenshots
 
+The screenshots use sample accounts and articles from a dedicated demo workspace.
+
 | | | |
 |---|---|---|
 | [Sign in](docs/screenshots/01-login.png) | [Sign up](docs/screenshots/02-sign-up.png) | [Dashboard](docs/screenshots/03-dashboard.png) |
