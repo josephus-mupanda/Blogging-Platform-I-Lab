@@ -11,6 +11,7 @@ import org.example.bloggingplatformi.model.User;
 public class CommentService {
 
     private final CommentDao commentDao = new CommentDao();
+    private final UserService userService = new UserService();
 
     public List<Comment> forPost(long postId) {
         return commentDao.findByPost(postId);
@@ -18,6 +19,7 @@ public class CommentService {
 
     public void add(long postId, User author, String body) {
         checkBody(body);
+        userService.requireActive(author);
         commentDao.insert(postId, author.id(), author.displayName(), body.strip());
     }
 
@@ -42,6 +44,7 @@ public class CommentService {
     }
 
     private void checkAllowed(Comment comment, User user) {
+        userService.requireActive(user);
         if (!canChange(comment, user)) {
             throw new ValidationException("You can only change your own comments.");
         }

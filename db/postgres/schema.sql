@@ -20,6 +20,7 @@ CREATE TABLE users (
     password_hash VARCHAR(64)  NOT NULL,          -- SHA-256 of the password, never the password itself
     display_name  VARCHAR(100) NOT NULL,
     role          VARCHAR(10)  NOT NULL CHECK (role IN ('ADMIN', 'AUTHOR', 'READER')),
+    active        BOOLEAN      NOT NULL DEFAULT TRUE,
     created_at    TIMESTAMP    NOT NULL DEFAULT now()
 );
 

@@ -11,6 +11,7 @@ import org.example.bloggingplatformi.model.User;
 public class ReviewService {
 
     private final ReviewDao reviewDao = new ReviewDao();
+    private final UserService userService = new UserService();
 
     public List<Review> forPost(long postId) {
         return reviewDao.findByPost(postId);
@@ -21,6 +22,7 @@ public class ReviewService {
         if (rating < 1 || rating > 5) {
             throw new ValidationException("The rating must be between 1 and 5.");
         }
+        userService.requireActive(reviewer);
         if (reviewDao.exists(postId, reviewer.id())) {
             throw new ValidationException("You have already reviewed this post.");
         }

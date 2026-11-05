@@ -167,7 +167,7 @@ public class MainController {
 
     @FXML
     public void showUsers() {
-        if (confirmDiscardDraft()) {
+        if (Session.isAdmin() && confirmDiscardDraft()) {
             show("Users", new UsersController().getRoot(), usersButton);
         }
     }

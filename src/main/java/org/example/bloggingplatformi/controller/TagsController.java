@@ -9,14 +9,17 @@ import javafx.scene.layout.FlowPane;
 import org.example.bloggingplatformi.exception.ValidationException;
 import org.example.bloggingplatformi.model.Tag;
 import org.example.bloggingplatformi.service.TagService;
+import org.example.bloggingplatformi.service.UserService;
 import org.example.bloggingplatformi.ui.Dialogs;
 import org.example.bloggingplatformi.ui.Fxml;
+import org.example.bloggingplatformi.ui.Session;
 import org.example.bloggingplatformi.ui.TagChips;
 
 /** Controller of tags.fxml (admin only). */
 public class TagsController {
 
     private final TagService tagService = new TagService();
+    private final UserService userService = new UserService();
     private final MainController main;
     private final Parent root;
 
@@ -61,6 +64,7 @@ public class TagsController {
     @FXML
     private void addTag() {
         try {
+            userService.requireAdmin(Session.user());
             tagService.create(nameField.getText());
             nameField.clear();
             errorLabel.setText("");
@@ -77,6 +81,7 @@ public class TagsController {
     private void deleteTag(Tag tag) {
         if (Dialogs.confirm("Delete tag?", "\"" + tag.name() + "\" will be removed from its posts.", "Delete tag", true)) {
             try {
+                userService.requireAdmin(Session.user());
                 tagService.delete(tag.id());
                 errorLabel.setText("");
                 refresh();

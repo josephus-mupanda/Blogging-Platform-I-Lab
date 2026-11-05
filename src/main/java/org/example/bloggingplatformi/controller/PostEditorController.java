@@ -18,6 +18,7 @@ import org.example.bloggingplatformi.model.Post;
 import org.example.bloggingplatformi.model.Tag;
 import org.example.bloggingplatformi.service.PostService;
 import org.example.bloggingplatformi.service.TagService;
+import org.example.bloggingplatformi.service.UserService;
 import org.example.bloggingplatformi.ui.Dialogs;
 import org.example.bloggingplatformi.ui.Fxml;
 import org.example.bloggingplatformi.ui.Session;
@@ -30,6 +31,7 @@ public class PostEditorController {
     private final Long postId;
     private final PostService postService = new PostService();
     private final TagService tagService = new TagService();
+    private final UserService userService = new UserService();
     private final Set<Tag> selectedTags = new LinkedHashSet<>();
     private final Parent root;
     private List<Tag> availableTags;
@@ -131,6 +133,7 @@ public class PostEditorController {
     @FXML
     private void save() {
         try {
+            userService.requireActive(Session.user());
             List<Long> tagIds = selectedTags.stream().map(Tag::id).toList();
             long savedId;
             if (postId == null) {
@@ -156,6 +159,8 @@ public class PostEditorController {
                     Dialogs.error("Could not refresh the tags: " + reloadError.getMessage());
                 }
                 tagPicker.requestFocus();
+            } else {
+                Dialogs.error(e.getMessage());
             }
         } catch (RuntimeException e) {
             Dialogs.error("Could not save the post: " + e.getMessage());

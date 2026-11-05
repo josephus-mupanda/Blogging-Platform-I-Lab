@@ -67,6 +67,27 @@ public class UserDao {
         return exists("SELECT 1 FROM users WHERE email = ?", email);
     }
 
+    public boolean isActive(long userId) {
+        try (PreparedStatement statement = Database.connection().prepareStatement(
+                "SELECT 1 FROM users WHERE user_id = ? AND active")) {
+            statement.setLong(1, userId);
+            return statement.executeQuery().next();
+        } catch (SQLException e) {
+            throw new DatabaseException("Could not check account status", e);
+        }
+    }
+
+    public boolean setActive(long userId, boolean active) {
+        try (PreparedStatement statement = Database.connection().prepareStatement(
+                "UPDATE users SET active = ? WHERE user_id = ? AND role <> 'ADMIN'")) {
+            statement.setBoolean(1, active);
+            statement.setLong(2, userId);
+            return statement.executeUpdate() == 1;
+        } catch (SQLException e) {
+            throw new DatabaseException("Could not update account status", e);
+        }
+    }
+
     private boolean exists(String sql, String value) {
         try (PreparedStatement statement = Database.connection().prepareStatement(sql)) {
             statement.setString(1, value);
@@ -109,6 +130,7 @@ public class UserDao {
                 row.getString("password_hash"),
                 row.getString("display_name"),
                 Role.valueOf(row.getString("role")),
+                row.getBoolean("active"),
                 row.getTimestamp("created_at").toLocalDateTime());
     }
 }

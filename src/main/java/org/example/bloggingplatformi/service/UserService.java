@@ -64,7 +64,30 @@ public class UserService {
         if (user == null || !Passwords.matches(password, user.passwordHash())) {
             throw new ValidationException("Wrong username or password.");
         }
+        if (!user.active()) {
+            throw new ValidationException("This account is deactivated. Contact an administrator.");
+        }
         return user;
+    }
+
+    public void requireActive(User user) {
+        if (user == null || !userDao.isActive(user.id())) {
+            throw new ValidationException("This account is inactive. Sign in with an active account to continue.");
+        }
+    }
+
+    public void requireAdmin(User actor) {
+        requireActive(actor);
+        if (!actor.role().isAdmin()) {
+            throw new ValidationException("Only an administrator can do this.");
+        }
+    }
+
+    public void setActive(User actor, long accountId, boolean active) {
+        requireAdmin(actor);
+        if (!userDao.setActive(accountId, active)) {
+            throw new ValidationException("Administrator accounts are protected, or this account no longer exists.");
+        }
     }
 
     public List<User> findAll() {

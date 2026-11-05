@@ -31,6 +31,7 @@ import org.example.bloggingplatformi.model.Tag;
 import org.example.bloggingplatformi.service.CommentService;
 import org.example.bloggingplatformi.service.PostService;
 import org.example.bloggingplatformi.service.ReviewService;
+import org.example.bloggingplatformi.service.UserService;
 import org.example.bloggingplatformi.ui.Dates;
 import org.example.bloggingplatformi.ui.Dialogs;
 import org.example.bloggingplatformi.ui.Fxml;
@@ -45,6 +46,7 @@ public class PostDetailController {
     private final PostService postService = new PostService();
     private final CommentService commentService = new CommentService();
     private final ReviewService reviewService = new ReviewService();
+    private final UserService userService = new UserService();
     private final Parent root;
 
     @FXML private Label titleLabel;
@@ -283,6 +285,7 @@ public class PostDetailController {
         if (Dialogs.confirm("Delete post?", "\"" + titleLabel.getText()
                 + "\" and its comments and reviews will be permanently removed.", "Delete post", true)) {
             try {
+                userService.requireActive(Session.user());
                 postService.delete(postId);
                 main.showPosts();
             } catch (RuntimeException e) {

@@ -10,6 +10,7 @@ public record User(
         String passwordHash,
         String displayName,
         Role role,
+        boolean active,
         LocalDateTime createdAt) {
 
     /** What a ComboBox shows for this user (and it keeps the password hash out of the logs). */
