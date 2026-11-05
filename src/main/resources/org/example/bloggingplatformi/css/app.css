@@ -37,7 +37,18 @@
 .field-label  { -fx-font-weight: bold; }
 .error-text   { -fx-text-fill: #a61b1b; }
 .success-text { -fx-text-fill: #047857; }
-.post-body    { -fx-font-size: 14px; -fx-line-spacing: 5; }
+.article-title {
+    -fx-font-family: "Georgia";
+    -fx-font-size: 29px;
+    -fx-font-weight: bold;
+}
+.post-body {
+    -fx-font-size: 15px;
+    -fx-line-spacing: 6;
+}
+.article-panel {
+    -fx-padding: 22;
+}
 
 .button, .toggle-button {
     -fx-background-color: #fff;
@@ -155,6 +166,9 @@
     -fx-background-color: #e0e7ff;
     -fx-border-color: #818cf8;
     -fx-text-fill: #312e81;
+}
+.rating-option {
+    -fx-padding: 6 8;
 }
 
 .discussion {

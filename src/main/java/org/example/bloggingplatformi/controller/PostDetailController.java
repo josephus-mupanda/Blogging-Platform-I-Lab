@@ -10,11 +10,14 @@ import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
+import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.Toggle;
 import javafx.scene.control.ToggleButton;
 import javafx.scene.control.ToggleGroup;
 import javafx.scene.layout.FlowPane;
+import javafx.scene.layout.ColumnConstraints;
+import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
@@ -44,6 +47,9 @@ public class PostDetailController {
     private final Parent root;
 
     @FXML private Label titleLabel;
+    @FXML private ScrollPane detailScroll;
+    @FXML private GridPane readerGrid;
+    @FXML private VBox reviewsPanel;
     @FXML private Label infoLabel;
     @FXML private Label bodyLabel;
     @FXML private Button editButton;
@@ -56,10 +62,13 @@ public class PostDetailController {
     @FXML private Button editCommentButton;
     @FXML private Button deleteCommentButton;
     @FXML private Label averageLabel;
+    @FXML private VBox reviewForm;
+    @FXML private Label reviewPosted;
     @FXML private ListView<Review> reviewList;
     @FXML private FlowPane ratingChoices;
     @FXML private TextArea reviewField;
     private final ToggleGroup ratings = new ToggleGroup();
+    private boolean twoColumns;
 
     public PostDetailController(MainController main, long postId) {
         this.main = main;
@@ -73,6 +82,8 @@ public class PostDetailController {
 
     @FXML
     private void initialize() {
+        detailScroll.viewportBoundsProperty().addListener(
+                (observable, previous, bounds) -> layoutColumns(bounds.getWidth()));
         commentError.visibleProperty().bind(commentError.textProperty().isNotEmpty());
         reviewError.visibleProperty().bind(reviewError.textProperty().isNotEmpty());
         for (int score = 1; score <= 5; score++) {
@@ -117,6 +128,24 @@ public class PostDetailController {
         }
     }
 
+    private void layoutColumns(double viewportWidth) {
+        boolean wide = viewportWidth >= 735;
+        if (wide == twoColumns) {
+            return;
+        }
+        twoColumns = wide;
+        ColumnConstraints article = new ColumnConstraints();
+        article.setPercentWidth(wide ? 62 : 100);
+        readerGrid.getColumnConstraints().setAll(article);
+        if (wide) {
+            ColumnConstraints reviews = new ColumnConstraints();
+            reviews.setPercentWidth(38);
+            readerGrid.getColumnConstraints().add(reviews);
+        }
+        GridPane.setColumnIndex(reviewsPanel, wide ? 1 : 0);
+        GridPane.setRowIndex(reviewsPanel, wide ? 0 : 1);
+    }
+
     private void showPost() {
         Post post = postService.findById(postId); // from the cache if it is there
         for (Tag tag : postService.tagsOf(postId)) {
@@ -139,11 +168,13 @@ public class PostDetailController {
         author.setWrapText(true);
         Label date = new Label(Dates.format(createdAt));
         date.getStyleClass().add("small");
+        date.setMinWidth(0);
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
         HBox byline = new HBox(8, author, spacer, date);
         VBox entry = new VBox(6, byline);
-        entry.prefWidthProperty().bind(cell.widthProperty().subtract(24));
+        entry.prefWidthProperty().bind(cell.widthProperty().subtract(32));
+        entry.maxWidthProperty().bind(entry.prefWidthProperty());
         entry.setMinWidth(0);
         if (rating != null) {
             int filled = Math.max(0, Math.min(5, rating));
@@ -167,7 +198,10 @@ public class PostDetailController {
     private void showReviews() {
         List<Review> reviews = reviewService.forPost(postId);
         reviewList.getItems().setAll(reviews);
-        reviewList.setPrefHeight(reviews.isEmpty() ? 65 : 150);
+        reviewList.setPrefHeight(reviews.isEmpty() ? 65 : 190);
+        boolean hasReviewed = reviews.stream().anyMatch(review -> review.reviewerId() == Session.user().id());
+        reviewForm.setVisible(!hasReviewed);
+        reviewPosted.setVisible(hasReviewed);
         averageLabel.setText(reviews.isEmpty()
                 ? "No reviews yet."
                 : String.format("%.1f / 5  ·  %d %s", reviewService.average(reviews), reviews.size(),

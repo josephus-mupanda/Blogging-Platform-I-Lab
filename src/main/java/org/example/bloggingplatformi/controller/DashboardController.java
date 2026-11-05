@@ -62,7 +62,8 @@ public class DashboardController {
                 latestPosts.getChildren().add(empty);
             }
             for (Map.Entry<String, Integer> tag : tagService.usage().entrySet()) {
-                topTags.getItems().add(tag.getKey() + "  (" + tag.getValue() + " posts)");
+                int count = tag.getValue();
+                topTags.getItems().add(tag.getKey() + "  ·  " + count + (count == 1 ? " post" : " posts"));
             }
             // MongoDB
             commentsCount.setText(String.valueOf(commentService.count()));

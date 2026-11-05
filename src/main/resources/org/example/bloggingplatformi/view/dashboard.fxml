@@ -32,7 +32,9 @@
         </VBox>
         <VBox spacing="8" styleClass="card" prefWidth="320">
             <Label text="Most used tags" styleClass="subtitle"/>
-            <ListView fx:id="topTags" VBox.vgrow="ALWAYS"/>
+            <ListView fx:id="topTags" styleClass="discussion" VBox.vgrow="ALWAYS">
+                <placeholder><Label text="No tags yet." styleClass="small"/></placeholder>
+            </ListView>
         </VBox>
     </HBox>
 </VBox>

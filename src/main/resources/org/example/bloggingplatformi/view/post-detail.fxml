@@ -7,70 +7,78 @@
 <?import javafx.scene.control.ScrollPane?>
 <?import javafx.scene.control.TextArea?>
 <?import javafx.scene.layout.FlowPane?>
+<?import javafx.scene.layout.GridPane?>
 <?import javafx.scene.layout.HBox?>
 <?import javafx.scene.layout.Region?>
 <?import javafx.scene.layout.VBox?>
 
-<ScrollPane xmlns="http://javafx.com/javafx" xmlns:fx="http://javafx.com/fxml"
+<ScrollPane fx:id="detailScroll" xmlns="http://javafx.com/javafx" xmlns:fx="http://javafx.com/fxml"
             fx:controller="org.example.bloggingplatformi.controller.PostDetailController"
             fitToWidth="true" hbarPolicy="NEVER" styleClass="content-scroll">
     <VBox spacing="14">
         <padding><Insets top="24" right="24" bottom="24" left="24"/></padding>
 
-        <VBox spacing="12" styleClass="card">
-            <Button text="‹  Back to posts" styleClass="link" onAction="#back"/>
-            <Label fx:id="titleLabel" styleClass="title" wrapText="true"/>
-            <Label fx:id="infoLabel" styleClass="small" wrapText="true"/>
-            <FlowPane fx:id="postTags" hgap="6" vgap="6" managed="${postTags.visible}"/>
-            <Label fx:id="bodyLabel" wrapText="true" styleClass="post-body"/>
-            <HBox spacing="10">
-                <Button fx:id="editButton" text="Edit post" onAction="#editPost"
-                        visible="false" managed="${editButton.visible}"/>
-                <Button fx:id="deleteButton" text="Delete post" styleClass="danger" onAction="#deletePost"
-                        visible="false" managed="${deleteButton.visible}"/>
-            </HBox>
-        </VBox>
+        <Button text="‹  Back to posts" styleClass="link" onAction="#back"/>
+        <GridPane fx:id="readerGrid" hgap="18" vgap="16">
+            <VBox spacing="16" minWidth="0" GridPane.hgrow="ALWAYS" GridPane.valignment="TOP">
+                <VBox spacing="12" styleClass="card,article-panel">
+                    <Label fx:id="titleLabel" styleClass="article-title" wrapText="true"/>
+                    <Label fx:id="infoLabel" styleClass="small" wrapText="true"/>
+                    <FlowPane fx:id="postTags" hgap="6" vgap="6" managed="${postTags.visible}"/>
+                    <Label fx:id="bodyLabel" wrapText="true" styleClass="post-body"/>
+                    <HBox spacing="10">
+                        <Button fx:id="editButton" text="Edit post" onAction="#editPost"
+                                visible="false" managed="${editButton.visible}"/>
+                        <Button fx:id="deleteButton" text="Delete post" styleClass="danger" onAction="#deletePost"
+                                visible="false" managed="${deleteButton.visible}"/>
+                    </HBox>
+                </VBox>
 
-        <VBox spacing="12" styleClass="card">
-            <Label text="Comments" styleClass="subtitle"/>
-            <ListView fx:id="commentList" prefHeight="150" styleClass="discussion">
-                <placeholder><Label text="No comments yet." styleClass="small"/></placeholder>
-            </ListView>
-            <HBox spacing="8" alignment="CENTER_LEFT"
-                  visible="${!editCommentButton.disabled}" managed="${!editCommentButton.disabled}">
-                <Button fx:id="editCommentButton" text="Edit selected" onAction="#editComment"/>
-                <Button fx:id="deleteCommentButton" text="Delete selected" styleClass="danger" onAction="#deleteComment"/>
-            </HBox>
-            <VBox spacing="8" styleClass="form-section">
-                <Label text="Join the discussion" styleClass="field-label"/>
-                <TextArea fx:id="commentField" promptText="Write a comment…" accessibleText="Comment"
-                          prefRowCount="3" wrapText="true"/>
-                <Label fx:id="commentError" styleClass="error-text" wrapText="true" managed="${commentError.visible}"/>
-                <HBox alignment="CENTER_RIGHT">
-                    <Button text="Post comment" styleClass="primary" onAction="#addComment"/>
-                </HBox>
+                <VBox spacing="12" styleClass="card">
+                    <Label text="Comments" styleClass="subtitle"/>
+                    <ListView fx:id="commentList" prefHeight="150" styleClass="discussion">
+                        <placeholder><Label text="No comments yet." styleClass="small"/></placeholder>
+                    </ListView>
+                    <HBox spacing="8" alignment="CENTER_LEFT"
+                          visible="${!editCommentButton.disabled}" managed="${!editCommentButton.disabled}">
+                        <Button fx:id="editCommentButton" text="Edit selected" onAction="#editComment"/>
+                        <Button fx:id="deleteCommentButton" text="Delete selected" styleClass="danger" onAction="#deleteComment"/>
+                    </HBox>
+                    <VBox spacing="8" styleClass="form-section">
+                        <Label text="Join the discussion" styleClass="field-label"/>
+                        <TextArea fx:id="commentField" promptText="Write a comment…" accessibleText="Comment"
+                                  prefRowCount="3" wrapText="true"/>
+                        <Label fx:id="commentError" styleClass="error-text" wrapText="true" managed="${commentError.visible}"/>
+                        <HBox alignment="CENTER_RIGHT">
+                            <Button text="Post comment" styleClass="primary" onAction="#addComment"/>
+                        </HBox>
+                    </VBox>
+                </VBox>
             </VBox>
-        </VBox>
 
-        <VBox spacing="12" styleClass="card">
-            <HBox spacing="8" alignment="CENTER_LEFT">
-                <Label text="Reviews" styleClass="subtitle"/>
-                <Region HBox.hgrow="ALWAYS"/>
-                <Label fx:id="averageLabel" styleClass="rating-summary"/>
-            </HBox>
-            <ListView fx:id="reviewList" prefHeight="150" styleClass="discussion">
-                <placeholder><Label text="Be the first to leave a rating." styleClass="small"/></placeholder>
-            </ListView>
-            <VBox spacing="8" styleClass="form-section">
-                <Label text="Your rating" styleClass="field-label"/>
-                <FlowPane fx:id="ratingChoices" hgap="6" vgap="6"/>
-                <TextArea fx:id="reviewField" promptText="Share your thoughts (optional)" accessibleText="Review text"
-                          prefRowCount="3" wrapText="true"/>
-                <Label fx:id="reviewError" styleClass="error-text" wrapText="true" managed="${reviewError.visible}"/>
-                <HBox alignment="CENTER_RIGHT">
-                    <Button text="Submit review" styleClass="primary" onAction="#addReview"/>
+            <VBox fx:id="reviewsPanel" spacing="12" minWidth="0" maxHeight="-Infinity" styleClass="card"
+                  GridPane.rowIndex="1" GridPane.hgrow="ALWAYS" GridPane.valignment="TOP">
+                <HBox spacing="8" alignment="CENTER_LEFT">
+                    <Label text="Reviews" styleClass="subtitle"/>
+                    <Region HBox.hgrow="ALWAYS"/>
+                    <Label fx:id="averageLabel" styleClass="rating-summary" wrapText="true"/>
                 </HBox>
+                <ListView fx:id="reviewList" prefHeight="150" styleClass="discussion">
+                    <placeholder><Label text="Be the first to leave a rating." styleClass="small"/></placeholder>
+                </ListView>
+                <Label fx:id="reviewPosted" text="You’ve already reviewed this article." styleClass="small"
+                       wrapText="true" visible="false" managed="${reviewPosted.visible}"/>
+                <VBox fx:id="reviewForm" spacing="8" styleClass="form-section" managed="${reviewForm.visible}">
+                    <Label text="Your rating" styleClass="field-label"/>
+                    <FlowPane fx:id="ratingChoices" hgap="6" vgap="6"/>
+                    <TextArea fx:id="reviewField" promptText="Share your thoughts (optional)" accessibleText="Review text"
+                              prefRowCount="3" wrapText="true"/>
+                    <Label fx:id="reviewError" styleClass="error-text" wrapText="true" managed="${reviewError.visible}"/>
+                    <HBox alignment="CENTER_RIGHT">
+                        <Button text="Submit review" styleClass="primary" onAction="#addReview"/>
+                    </HBox>
+                </VBox>
             </VBox>
-        </VBox>
+        </GridPane>
     </VBox>
 </ScrollPane>
