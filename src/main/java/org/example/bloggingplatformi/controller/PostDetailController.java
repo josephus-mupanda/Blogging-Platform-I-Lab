@@ -1,19 +1,23 @@
 package org.example.bloggingplatformi.controller;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
 import javafx.fxml.FXML;
 import javafx.scene.Parent;
 import javafx.scene.control.Button;
-import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
-import javafx.scene.control.TextField;
-import javafx.scene.control.TextInputDialog;
+import javafx.scene.control.TextArea;
+import javafx.scene.control.Toggle;
+import javafx.scene.control.ToggleButton;
+import javafx.scene.control.ToggleGroup;
+import javafx.scene.layout.FlowPane;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 
 import org.example.bloggingplatformi.exception.ValidationException;
@@ -44,15 +48,18 @@ public class PostDetailController {
     @FXML private Label bodyLabel;
     @FXML private Button editButton;
     @FXML private Button deleteButton;
-    @FXML private Label errorLabel;
+    @FXML private FlowPane postTags;
+    @FXML private Label commentError;
+    @FXML private Label reviewError;
     @FXML private ListView<Comment> commentList;
-    @FXML private TextField commentField;
+    @FXML private TextArea commentField;
     @FXML private Button editCommentButton;
     @FXML private Button deleteCommentButton;
     @FXML private Label averageLabel;
     @FXML private ListView<Review> reviewList;
-    @FXML private ComboBox<Integer> ratingBox;
-    @FXML private TextField reviewField;
+    @FXML private FlowPane ratingChoices;
+    @FXML private TextArea reviewField;
+    private final ToggleGroup ratings = new ToggleGroup();
 
     public PostDetailController(MainController main, long postId) {
         this.main = main;
@@ -66,8 +73,16 @@ public class PostDetailController {
 
     @FXML
     private void initialize() {
-        errorLabel.visibleProperty().bind(errorLabel.textProperty().isNotEmpty());
-        ratingBox.getItems().addAll(5, 4, 3, 2, 1);
+        commentError.visibleProperty().bind(commentError.textProperty().isNotEmpty());
+        reviewError.visibleProperty().bind(reviewError.textProperty().isNotEmpty());
+        for (int score = 1; score <= 5; score++) {
+            ToggleButton option = new ToggleButton(score + " ★");
+            option.getStyleClass().add("rating-option");
+            option.setAccessibleText(score + " out of 5 stars");
+            option.setUserData(score);
+            option.setToggleGroup(ratings);
+            ratingChoices.getChildren().add(option);
+        }
 
         commentList.setCellFactory(list -> new ListCell<>() {
             @Override
@@ -104,13 +119,14 @@ public class PostDetailController {
 
     private void showPost() {
         Post post = postService.findById(postId); // from the cache if it is there
-        List<String> tags = new ArrayList<>();
         for (Tag tag : postService.tagsOf(postId)) {
-            tags.add(tag.name());
+            Label chip = new Label(tag.name());
+            chip.getStyleClass().add("tag-chip");
+            postTags.getChildren().add(chip);
         }
+        postTags.setVisible(!postTags.getChildren().isEmpty());
         titleLabel.setText(post.title());
-        infoLabel.setText("By " + post.authorName() + ", " + Dates.format(post.createdAt())
-                + (tags.isEmpty() ? "" : "   Tags: " + String.join(", ", tags)));
+        infoLabel.setText(post.authorName() + "  ·  " + Dates.format(post.createdAt()));
         bodyLabel.setText(post.body());
         boolean canEdit = Session.canEditPost(post.authorId());
         editButton.setVisible(canEdit);
@@ -123,7 +139,10 @@ public class PostDetailController {
         author.setWrapText(true);
         Label date = new Label(Dates.format(createdAt));
         date.getStyleClass().add("small");
-        VBox entry = new VBox(4, author, date);
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+        HBox byline = new HBox(8, author, spacer, date);
+        VBox entry = new VBox(6, byline);
         entry.prefWidthProperty().bind(cell.widthProperty().subtract(24));
         entry.setMinWidth(0);
         if (rating != null) {
@@ -142,11 +161,13 @@ public class PostDetailController {
 
     private void showComments() {
         commentList.getItems().setAll(commentService.forPost(postId));
+        commentList.setPrefHeight(commentList.getItems().isEmpty() ? 65 : 150);
     }
 
     private void showReviews() {
         List<Review> reviews = reviewService.forPost(postId);
         reviewList.getItems().setAll(reviews);
+        reviewList.setPrefHeight(reviews.isEmpty() ? 65 : 150);
         averageLabel.setText(reviews.isEmpty()
                 ? "No reviews yet."
                 : String.format("%.1f / 5  ·  %d %s", reviewService.average(reviews), reviews.size(),
@@ -158,10 +179,10 @@ public class PostDetailController {
         try {
             commentService.add(postId, Session.user(), commentField.getText());
             commentField.clear();
-            errorLabel.setText("");
+            commentError.setText("");
             showComments();
         } catch (ValidationException e) {
-            errorLabel.setText(e.getMessage());
+            commentError.setText(e.getMessage());
         } catch (RuntimeException e) {
             Dialogs.error("Could not save the comment. Is MongoDB running?\n\n" + e.getMessage());
         }
@@ -170,16 +191,16 @@ public class PostDetailController {
     @FXML
     private void editComment() {
         Comment comment = commentList.getSelectionModel().getSelectedItem();
-        TextInputDialog dialog = new TextInputDialog(comment.body());
-        dialog.setHeaderText("Edit your comment");
-        Optional<String> newText = dialog.showAndWait();
+        Optional<String> newText = Dialogs.editComment(comment.body());
         if (newText.isPresent()) {
             try {
                 commentService.edit(comment, Session.user(), newText.get());
-                errorLabel.setText("");
+                commentError.setText("");
                 showComments();
             } catch (ValidationException e) {
-                errorLabel.setText(e.getMessage());
+                commentError.setText(e.getMessage());
+            } catch (RuntimeException e) {
+                Dialogs.error("Could not edit the comment: " + e.getMessage());
             }
         }
     }
@@ -187,25 +208,32 @@ public class PostDetailController {
     @FXML
     private void deleteComment() {
         Comment comment = commentList.getSelectionModel().getSelectedItem();
-        if (Dialogs.confirm("Delete this comment?")) {
-            commentService.delete(comment, Session.user());
-            showComments();
+        if (Dialogs.confirm("Delete comment?", "This comment will be permanently removed.", "Delete comment", true)) {
+            try {
+                commentService.delete(comment, Session.user());
+                commentError.setText("");
+                showComments();
+            } catch (RuntimeException e) {
+                Dialogs.error("Could not delete the comment: " + e.getMessage());
+            }
         }
     }
 
     @FXML
     private void addReview() {
-        if (ratingBox.getValue() == null) {
-            errorLabel.setText("Please choose a rating from 1 to 5.");
+        Toggle selected = ratings.getSelectedToggle();
+        if (selected == null) {
+            reviewError.setText("Choose a rating from 1 to 5.");
             return;
         }
         try {
-            reviewService.add(postId, Session.user(), ratingBox.getValue(), reviewField.getText());
+            reviewService.add(postId, Session.user(), (Integer) selected.getUserData(), reviewField.getText());
+            ratings.selectToggle(null);
             reviewField.clear();
-            errorLabel.setText("");
+            reviewError.setText("");
             showReviews();
         } catch (ValidationException e) {
-            errorLabel.setText(e.getMessage());
+            reviewError.setText(e.getMessage());
         } catch (RuntimeException e) {
             Dialogs.error("Could not save the review. Is MongoDB running?\n\n" + e.getMessage());
         }
@@ -218,7 +246,8 @@ public class PostDetailController {
 
     @FXML
     private void deletePost() {
-        if (Dialogs.confirm("Delete \"" + titleLabel.getText() + "\"? Its comments and reviews are deleted too.")) {
+        if (Dialogs.confirm("Delete post?", "\"" + titleLabel.getText()
+                + "\" and its comments and reviews will be permanently removed.", "Delete post", true)) {
             try {
                 postService.delete(postId);
                 main.showPosts();

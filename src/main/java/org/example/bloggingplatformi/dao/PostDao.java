@@ -20,13 +20,20 @@ public class PostDao {
 
     /** Returns the post, or null if it does not exist. */
     public Post findById(long postId) {
-        String sql = SELECT_POSTS + " WHERE p.post_id = ?";
-        try (PreparedStatement statement = Database.connection().prepareStatement(sql)) {
-            statement.setLong(1, postId);
-            ResultSet rows = statement.executeQuery();
-            return rows.next() ? toPost(rows) : null;
+        try {
+            return findById(Database.connection(), postId);
         } catch (SQLException e) {
             throw new DatabaseException("Could not load the post", e);
+        }
+    }
+
+    private Post findById(Connection connection, long postId) throws SQLException {
+        String sql = SELECT_POSTS + " WHERE p.post_id = ?";
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setLong(1, postId);
+            try (ResultSet rows = statement.executeQuery()) {
+                return rows.next() ? toPost(rows) : null;
+            }
         }
     }
 
@@ -98,9 +105,10 @@ public class PostDao {
     /**
      * Saves a new post and its tags in one transaction:
      * either both are saved, or nothing is (rollback on error).
-     * Returns the id PostgreSQL gave to the new post.
+     * Returns the saved post with its database-generated fields.
      */
-    public long insert(long authorId, String title, String body, List<Long> tagIds) {
+    public Post insert(long authorId, String title, String body, List<Long> tagIds) {
+        List<Long> tags = List.copyOf(tagIds);
         String sql = "INSERT INTO posts (author_id, title, body) VALUES (?, ?, ?) RETURNING post_id";
         try {
             Connection connection = Database.connection();
@@ -113,9 +121,10 @@ public class PostDao {
                 rows.next();
                 long postId = rows.getLong(1);
 
-                saveTags(connection, postId, tagIds);
+                saveTags(connection, postId, tags);
+                Post saved = findById(connection, postId);
                 connection.commit();     // save everything
-                return postId;
+                return saved;
             } catch (SQLException e) {
                 connection.rollback();   // undo everything
                 throw e;
@@ -128,7 +137,8 @@ public class PostDao {
     }
 
     /** Updates a post and replaces its tags, in one transaction. */
-    public void update(long postId, String title, String body, List<Long> tagIds) {
+    public Post update(long postId, String title, String body, List<Long> tagIds) {
+        List<Long> tags = List.copyOf(tagIds);
         String sql = "UPDATE posts SET title = ?, body = ?, updated_at = now() WHERE post_id = ?";
         try {
             Connection connection = Database.connection();
@@ -138,12 +148,16 @@ public class PostDao {
                 statement.setString(1, title);
                 statement.setString(2, body);
                 statement.setLong(3, postId);
-                statement.executeUpdate();
+                if (statement.executeUpdate() == 0) {
+                    throw new SQLException("The post no longer exists.");
+                }
 
                 removeTags.setLong(1, postId);
                 removeTags.executeUpdate();
-                saveTags(connection, postId, tagIds);
+                saveTags(connection, postId, tags);
+                Post saved = findById(connection, postId);
                 connection.commit();
+                return saved;
             } catch (SQLException e) {
                 connection.rollback();
                 throw e;

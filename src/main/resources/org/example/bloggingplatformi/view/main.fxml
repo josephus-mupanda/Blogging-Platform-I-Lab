@@ -19,8 +19,8 @@
         <VBox spacing="6" styleClass="sidebar">
             <padding><Insets top="20" right="14" bottom="20" left="14"/></padding>
             <Label text="Blogfold" styleClass="sidebar-brand"/>
-            <Button text="Dashboard" styleClass="nav" maxWidth="Infinity" onAction="#showDashboard"/>
-            <Button text="Posts" styleClass="nav" maxWidth="Infinity" onAction="#showPosts"/>
+            <Button fx:id="dashboardButton" text="Dashboard" styleClass="nav" maxWidth="Infinity" onAction="#showDashboard"/>
+            <Button fx:id="postsButton" text="Posts" styleClass="nav" maxWidth="Infinity" onAction="#showPosts"/>
             <!-- Admin only: hidden for bloggers and readers. -->
             <Button fx:id="tagsButton" text="Tags" styleClass="nav" maxWidth="Infinity" onAction="#showTags"/>
             <Button fx:id="usersButton" text="Users" styleClass="nav" maxWidth="Infinity" onAction="#showUsers"/>

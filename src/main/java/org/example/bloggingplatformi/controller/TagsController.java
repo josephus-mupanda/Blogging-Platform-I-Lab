@@ -69,7 +69,7 @@ public class TagsController {
             errorLabel.setText("Select a tag first.");
             return;
         }
-        if (Dialogs.confirm("Delete the tag \"" + tag.name() + "\"? It is removed from its posts.")) {
+        if (Dialogs.confirm("Delete tag?", "\"" + tag.name() + "\" will be removed from its posts.", "Delete tag", true)) {
             tagService.delete(tag.id());
             errorLabel.setText("");
             refresh();

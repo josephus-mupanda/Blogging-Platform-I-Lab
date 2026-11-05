@@ -7,6 +7,7 @@ import javafx.scene.Parent;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
+import javafx.scene.control.ListCell;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.VBox;
@@ -32,6 +33,7 @@ public class PostListController {
 
     private int page = 0;      // the page shown now, starting at 0
     private int totalPages = 1;
+    private boolean clearingFilters;
 
     @FXML private TextField searchField;
     @FXML private ComboBox<User> authorBox;
@@ -61,10 +63,24 @@ public class PostListController {
         try {
             authorBox.getItems().setAll(userService.findAuthors());
             tagBox.getItems().setAll(tagService.findAll());
+            showFilterValue(authorBox);
+            showFilterValue(tagBox);
+            authorBox.valueProperty().addListener((observable, previous, current) -> search());
+            tagBox.valueProperty().addListener((observable, previous, current) -> search());
             loadPage();
         } catch (RuntimeException e) {
             Dialogs.error("Could not load the posts: " + e.getMessage());
         }
+    }
+
+    private <T> void showFilterValue(ComboBox<T> filter) {
+        filter.setButtonCell(new ListCell<>() {
+            @Override
+            protected void updateItem(T item, boolean empty) {
+                super.updateItem(item, empty);
+                setText(item == null ? filter.getPromptText() : item.toString());
+            }
+        });
     }
 
     /** Reads the current page from the database with the current filters. */
@@ -74,6 +90,7 @@ public class PostListController {
         Long tagId = tagBox.getValue() == null ? null : tagBox.getValue().id();
 
         totalPages = postService.countPages(keyword, authorId, tagId);
+        page = Math.min(page, totalPages - 1);
         List<Post> posts = postService.search(keyword, authorId, tagId, page);
         postCards.getChildren().setAll(posts.stream().map(main::postCard).toList());
         resultsScroll.setVvalue(0);
@@ -96,16 +113,26 @@ public class PostListController {
 
     @FXML
     private void search() {
-        page = 0; // new filters: go back to the first page
-        loadPage();
+        if (!clearingFilters) {
+            page = 0;
+            loadPage();
+        }
     }
 
     @FXML
     private void clearFilters() {
-        searchField.clear();
-        authorBox.setValue(null);
-        tagBox.setValue(null);
+        clearingFilters = true;
+        try {
+            searchField.clear();
+            authorBox.getSelectionModel().clearSelection();
+            tagBox.getSelectionModel().clearSelection();
+            authorBox.setValue(null);
+            tagBox.setValue(null);
+        } finally {
+            clearingFilters = false;
+        }
         search();
+        searchField.requestFocus();
     }
 
     @FXML

@@ -8,6 +8,7 @@
 <?import javafx.scene.control.Label?>
 <?import javafx.scene.control.ScrollPane?>
 <?import javafx.scene.control.TextField?>
+<?import javafx.scene.layout.FlowPane?>
 <?import javafx.scene.layout.HBox?>
 <?import javafx.scene.layout.Region?>
 <?import javafx.scene.layout.VBox?>
@@ -17,19 +18,25 @@
       spacing="14">
     <padding><Insets top="24" right="24" bottom="24" left="24"/></padding>
 
-    <!-- Search and filters. Pressing Enter or choosing a filter runs the search. -->
-    <HBox spacing="10" alignment="CENTER_LEFT" styleClass="card">
-        <TextField fx:id="searchField" promptText="Search titles and text" prefWidth="280"
-                   onAction="#searchOnEnter" HBox.hgrow="ALWAYS"/>
-        <ComboBox fx:id="authorBox" promptText="All authors" prefWidth="145" onAction="#search"/>
-        <ComboBox fx:id="tagBox" promptText="All tags" prefWidth="120" onAction="#search"/>
-        <Button text="Search" styleClass="primary" onAction="#search"/>
-        <Button text="Clear" onAction="#clearFilters"/>
-    </HBox>
+    <VBox spacing="12" styleClass="card">
+        <HBox spacing="10" alignment="CENTER_LEFT">
+            <TextField fx:id="searchField" promptText="Search titles and post content"
+                       accessibleText="Search posts" onAction="#searchOnEnter" HBox.hgrow="ALWAYS"/>
+            <Button text="Search" styleClass="primary" onAction="#search"/>
+        </HBox>
+        <FlowPane hgap="10" vgap="8" rowValignment="CENTER">
+            <Label text="Filter by" styleClass="small"/>
+            <ComboBox fx:id="authorBox" promptText="All authors" accessibleText="Filter by author" prefWidth="165"/>
+            <ComboBox fx:id="tagBox" promptText="All tags" accessibleText="Filter by tag" prefWidth="145"/>
+            <Button text="Clear filters" styleClass="link" onAction="#clearFilters"/>
+        </FlowPane>
+    </VBox>
 
     <ScrollPane fx:id="resultsScroll" fitToWidth="true" hbarPolicy="NEVER" styleClass="content-scroll" VBox.vgrow="ALWAYS">
         <VBox>
-            <Label fx:id="emptyResults" text="No posts found." styleClass="small" visible="false" managed="${emptyResults.visible}"/>
+            <Label fx:id="emptyResults" text="No posts found. Try a different search or clear the filters."
+                   styleClass="empty-state" maxWidth="Infinity" wrapText="true"
+                   visible="false" managed="${emptyResults.visible}"/>
             <VBox fx:id="postCards" spacing="10"/>
         </VBox>
     </ScrollPane>

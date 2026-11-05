@@ -5,30 +5,47 @@
 <?import javafx.geometry.Insets?>
 <?import javafx.scene.control.Button?>
 <?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ScrollPane?>
 <?import javafx.scene.control.TextArea?>
 <?import javafx.scene.control.TextField?>
+<?import javafx.scene.layout.FlowPane?>
 <?import javafx.scene.layout.HBox?>
 <?import javafx.scene.layout.VBox?>
 
-<VBox xmlns="http://javafx.com/javafx" xmlns:fx="http://javafx.com/fxml"
-      fx:controller="org.example.bloggingplatformi.controller.PostEditorController"
-      spacing="10" styleClass="card">
-    <padding><Insets top="24" right="24" bottom="24" left="24"/></padding>
+<ScrollPane xmlns="http://javafx.com/javafx" xmlns:fx="http://javafx.com/fxml"
+            fx:controller="org.example.bloggingplatformi.controller.PostEditorController"
+            fitToWidth="true" hbarPolicy="NEVER" styleClass="content-scroll">
+    <VBox>
+        <padding><Insets top="20" right="24" bottom="24" left="24"/></padding>
+        <VBox spacing="18" styleClass="card">
+            <VBox spacing="6">
+                <Label text="Title" styleClass="field-label"/>
+                <TextField fx:id="titleField" promptText="Give your post a title" accessibleText="Post title"/>
+            </VBox>
 
-    <Label text="Title" styleClass="field-label"/>
-    <TextField fx:id="titleField" promptText="A clear title"/>
+            <VBox spacing="6">
+                <Label text="Post content" styleClass="field-label"/>
+                <TextArea fx:id="bodyArea" promptText="Write your post…" accessibleText="Post content"
+                          prefRowCount="10" wrapText="true"/>
+            </VBox>
 
-    <Label text="Text" styleClass="field-label"/>
-    <TextArea fx:id="bodyArea" promptText="Write the post..." wrapText="true" VBox.vgrow="ALWAYS"/>
+            <VBox spacing="8" styleClass="form-section">
+                <Label text="Tags" styleClass="subtitle"/>
+                <Label text="Select any existing tags that describe this post." styleClass="small" wrapText="true"/>
+                <Label fx:id="noTagsLabel" text="No tags are available yet." styleClass="small"
+                       visible="false" managed="${noTagsLabel.visible}"/>
+                <ScrollPane fitToWidth="true" hbarPolicy="NEVER" maxHeight="124" styleClass="content-scroll"
+                            visible="${!noTagsLabel.visible}" managed="${!noTagsLabel.visible}">
+                    <FlowPane fx:id="tagChoices" hgap="8" vgap="8"/>
+                </ScrollPane>
+            </VBox>
 
-    <Label text="Tags (separated by commas, for example: java, sql)" styleClass="field-label"/>
-    <TextField fx:id="tagsField" promptText="java, sql"/>
+            <Label fx:id="errorLabel" styleClass="error-text" wrapText="true" managed="${errorLabel.visible}"/>
 
-    <!-- A validation message, for example "A post needs a title." -->
-    <Label fx:id="errorLabel" styleClass="error-text" wrapText="true"/>
-
-    <HBox spacing="10">
-        <Button text="Save" styleClass="primary" onAction="#save"/>
-        <Button text="Cancel" onAction="#cancel"/>
-    </HBox>
-</VBox>
+            <HBox spacing="10" alignment="CENTER_RIGHT">
+                <Button text="Cancel" onAction="#cancel"/>
+                <Button text="Save post" styleClass="primary" onAction="#save"/>
+            </HBox>
+        </VBox>
+    </VBox>
+</ScrollPane>

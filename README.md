@@ -43,7 +43,7 @@ Use environment variables to override the defaults in [application.properties](s
 
 | Feature | Behavior |
 |---|---|
-| Posts | Create, edit, or delete posts with a title, body, and comma-separated tags. |
+| Posts | Create, edit, or delete posts with a title, body, and optional tags selected from the existing catalog. |
 | Discovery | Search titles and bodies without matching case. Filter by author or tag and browse 10 posts per page in newest-first order. |
 | Comments | Read and add comments. Edit or delete your own comments. |
 | Reviews | Submit a 1–5 rating with optional text, once per user per post. See the average on the post detail screen. |
@@ -62,7 +62,7 @@ Readers can browse, comment, and review. Bloggers can also create posts and edit
 
 ## Implementation and tests
 
-FXML defines the views. Controllers call services for validation and business rules. DAOs use parameterized JDBC statements for PostgreSQL and the MongoDB driver for comments and reviews. A shared `HashMap` caches post details by ID. The tag service uses merge sort to order tags and binary search to check for duplicate names.
+FXML defines the views. Controllers call services for validation and business rules. DAOs use parameterized JDBC statements for PostgreSQL and the MongoDB driver for comments and reviews. A shared `HashMap` caches post details by ID, stores the saved version after a create or update, and removes deleted posts. The tag service uses merge sort to order tags and binary search to check for duplicate names.
 
 Run `./mvnw test` or `.\mvnw.cmd test` on Windows. The unit tests cover validation, password hashing, sorting, and searching.
 

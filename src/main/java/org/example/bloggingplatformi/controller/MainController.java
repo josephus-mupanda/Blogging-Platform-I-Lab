@@ -1,10 +1,14 @@
 package org.example.bloggingplatformi.controller;
 
 import javafx.fxml.FXML;
+import javafx.geometry.Pos;
 import javafx.scene.Parent;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.input.KeyCode;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 
@@ -26,6 +30,8 @@ public class MainController {
 
     @FXML private Button tagsButton;
     @FXML private Button usersButton;
+    @FXML private Button dashboardButton;
+    @FXML private Button postsButton;
     @FXML private Label screenTitle;
     @FXML private Label userLabel;
     @FXML private StackPane content;
@@ -55,35 +61,54 @@ public class MainController {
     }
 
     /** Puts a screen in the middle of the window. */
-    private void show(String title, Parent screen) {
+    private void show(String title, Parent screen, Button activeButton) {
         screenTitle.setText(title);
         content.getChildren().setAll(screen);
+        for (Button button : new Button[] {dashboardButton, postsButton, tagsButton, usersButton}) {
+            button.getStyleClass().remove("active");
+        }
+        activeButton.getStyleClass().add("active");
     }
 
     @FXML
     public void showDashboard() {
-        show("Dashboard", new DashboardController(this).getRoot());
+        show("Dashboard", new DashboardController(this).getRoot(), dashboardButton);
     }
 
     @FXML
     public void showPosts() {
-        show("Posts", new PostListController(this).getRoot());
+        show("Posts", new PostListController(this).getRoot(), postsButton);
     }
 
     public void showPost(long postId) {
-        show("Post", new PostDetailController(this, postId).getRoot());
+        show("Post", new PostDetailController(this, postId).getRoot(), postsButton);
     }
 
     Button postCard(Post post) {
         Label title = new Label(post.title());
-        title.setWrapText(true);
+        title.setMinWidth(0);
         title.getStyleClass().add("subtitle");
         Label byline = new Label(post.authorName() + "  ·  " + Dates.format(post.createdAt()));
-        byline.setWrapText(true);
+        byline.setMinWidth(0);
         byline.getStyleClass().add("small");
+        String firstLine = post.body().lines().map(String::strip).filter(line -> !line.isEmpty()).findFirst().orElse("");
+        Label preview = new Label(firstLine);
+        preview.setMinWidth(0);
+        preview.setPrefWidth(240);
+        preview.setMaxWidth(Double.MAX_VALUE);
+        VBox copy = new VBox(4, title, byline, preview);
+        copy.setMinWidth(0);
+        HBox.setHgrow(copy, Priority.ALWAYS);
+        Label arrow = new Label("›");
+        arrow.getStyleClass().add("post-arrow");
+        HBox graphic = new HBox(10, copy, arrow);
+        graphic.setAlignment(Pos.CENTER_LEFT);
+        graphic.setMaxHeight(Region.USE_PREF_SIZE);
 
         Button card = new Button();
-        card.setGraphic(new VBox(4, title, byline));
+        card.setGraphic(graphic);
+        card.setMinWidth(0);
+        card.setMaxHeight(Region.USE_PREF_SIZE);
         card.setAccessibleText(post.title() + ", by " + post.authorName());
         card.setMaxWidth(Double.MAX_VALUE);
         card.getStyleClass().add("post-card");
@@ -99,22 +124,22 @@ public class MainController {
 
     /** postId = null for a new post. */
     public void showEditor(Long postId) {
-        show(postId == null ? "New post" : "Edit post", new PostEditorController(this, postId).getRoot());
+        show(postId == null ? "New post" : "Edit post", new PostEditorController(this, postId).getRoot(), postsButton);
     }
 
     @FXML
     public void showTags() {
-        show("Tags", new TagsController().getRoot());
+        show("Tags", new TagsController().getRoot(), tagsButton);
     }
 
     @FXML
     public void showUsers() {
-        show("Users", new UsersController().getRoot());
+        show("Users", new UsersController().getRoot(), usersButton);
     }
 
     @FXML
     private void signOut() {
-        if (Dialogs.confirm("Do you want to sign out?")) {
+        if (Dialogs.confirm("Sign out?", "You can sign in again at any time.", "Sign out", false)) {
             onSignOut.run();
         }
     }

@@ -1,6 +1,5 @@
 package org.example.bloggingplatformi.service;
 
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -35,14 +34,9 @@ public class PostService {
 
     /** Reads the post from the cache if it is there; otherwise from the database, then keeps it in the cache. */
     public Post findById(long postId) {
-        Post post = CACHE.get(postId);
-        if (post == null) {
-            post = postDao.findById(postId);
-            if (post != null) {
-                CACHE.put(postId, post);
-            }
+        synchronized (CACHE) {
+            return CACHE.computeIfAbsent(postId, postDao::findById);
         }
-        return post;
     }
 
     /** One page of posts that match the filters. page starts at 0. */
@@ -67,16 +61,21 @@ public class PostService {
         return tagDao.findByPost(postId);
     }
 
-    /** tagNames is what the user typed, for example "java, SQL". */
-    public long create(long authorId, String title, String body, String tagNames) {
+    public long create(long authorId, String title, String body, List<Long> tagIds) {
         validate(title, body);
-        return postDao.insert(authorId, title.strip(), body.strip(), tagIds(tagNames));
+        synchronized (CACHE) {
+            Post saved = postDao.insert(authorId, title.strip(), body.strip(), tagIds);
+            CACHE.put(saved.id(), saved);
+            return saved.id();
+        }
     }
 
-    public void update(long postId, String title, String body, String tagNames) {
+    public void update(long postId, String title, String body, List<Long> tagIds) {
         validate(title, body);
-        postDao.update(postId, title.strip(), body.strip(), tagIds(tagNames));
-        CACHE.remove(postId); // cache invalidation: the cached copy is now out of date
+        synchronized (CACHE) {
+            Post saved = postDao.update(postId, title.strip(), body.strip(), tagIds);
+            CACHE.put(postId, saved);
+        }
     }
 
     /**
@@ -84,10 +83,12 @@ public class PostService {
      * PostgreSQL's ON DELETE CASCADE cannot reach another database.
      */
     public void delete(long postId) {
-        commentDao.deleteByPost(postId);
-        reviewDao.deleteByPost(postId);
-        postDao.delete(postId);
-        CACHE.remove(postId); // cache invalidation
+        synchronized (CACHE) {
+            commentDao.deleteByPost(postId);
+            reviewDao.deleteByPost(postId);
+            postDao.delete(postId);
+            CACHE.remove(postId);
+        }
     }
 
     private void validate(String title, String body) {
@@ -102,21 +103,4 @@ public class PostService {
         }
     }
 
-    /** Turns "java, SQL" into the ids of the tags "java" and "sql" (created if they are new). */
-    private List<Long> tagIds(String tagNames) {
-        List<Long> ids = new ArrayList<>();
-        if (tagNames == null) {
-            return ids;
-        }
-        for (String name : tagNames.split(",")) {
-            String clean = name.strip().toLowerCase();
-            if (!clean.isEmpty()) {
-                long id = tagDao.findOrCreate(clean);
-                if (!ids.contains(id)) {
-                    ids.add(id);
-                }
-            }
-        }
-        return ids;
-    }
 }

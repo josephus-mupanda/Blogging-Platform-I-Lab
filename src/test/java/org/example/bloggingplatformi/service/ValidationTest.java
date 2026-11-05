@@ -3,6 +3,8 @@ package org.example.bloggingplatformi.service;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import java.util.List;
+
 import org.junit.jupiter.api.Test;
 
 import org.example.bloggingplatformi.exception.ValidationException;
@@ -20,13 +22,13 @@ class ValidationTest {
     @Test
     void aPostNeedsATitle() {
         ValidationException error = assertThrows(ValidationException.class,
-                () -> postService.create(1, "  ", "Some text", ""));
+                () -> postService.create(1, "  ", "Some text", List.of()));
         assertEquals("A post needs a title.", error.getMessage());
     }
 
     @Test
     void aPostNeedsSomeText() {
-        assertThrows(ValidationException.class, () -> postService.create(1, "A title", "", ""));
+        assertThrows(ValidationException.class, () -> postService.create(1, "A title", "", List.of()));
     }
 
     @Test
