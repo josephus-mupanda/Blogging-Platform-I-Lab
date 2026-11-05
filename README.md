@@ -39,6 +39,15 @@ Use environment variables to override the defaults in [application.properties](s
 | `DB_MONGO_URI` | `mongodb://localhost:27017/?serverSelectionTimeoutMS=3000` |
 | `DB_MONGO_DATABASE` | `blogging_platform` |
 
+### Upgrade an existing database
+
+Run these scripts once on an existing PostgreSQL database before launching this version. They preserve existing rows and can be run again. Use the same scripts with `-d blogging_platform_bench` if you already have a benchmark database.
+
+```sh
+psql -U postgres -p 5433 -d blogging_platform -v ON_ERROR_STOP=1 -f db/postgres/upgrade-account-status.sql
+psql -U postgres -p 5433 -d blogging_platform -v ON_ERROR_STOP=1 -f db/postgres/upgrade-trash.sql
+```
+
 ## Features and roles
 
 | Feature | Behavior |
@@ -48,9 +57,11 @@ Use environment variables to override the defaults in [application.properties](s
 | Comments | Read and add comments. Edit or delete your own comments. |
 | Reviews | Submit a 1–5 rating with optional text, once per user per post. See the average on the post detail screen. |
 | Dashboard | See counts of posts, users, tags, comments, and reviews, plus recent posts and tag usage. |
-| Administration | List accounts and create or delete tags. |
+| Administration | Deactivate and reactivate reader or blogger accounts, manage tags, and restore content from Trash. |
 
 Readers can browse, comment, and review. Bloggers can also create posts and edit or delete their own posts. Admins can edit or delete any post or comment and can access **Tags** and **Users**.
+
+Deactivated accounts cannot sign in or make changes from a session that is already open. Administrator accounts are protected from deactivation. In **Trash**, administrators can preview and restore posts, comments, and tags. Moving a post to Trash hides its discussion and keeps its reviews. A comment moved to Trash separately stays there until restored separately. The title of an archived post and the name of an archived tag remain reserved so they can be restored.
 
 The app checks title uniqueness when saving against an existing database. If older posts already share a title, give them distinct titles in the editor. Fresh databases also enforce uniqueness with a PostgreSQL index.
 
@@ -63,6 +74,7 @@ The screenshots use sample accounts and articles from a dedicated demo workspace
 | [Sign in](docs/screenshots/01-login.png) | [Sign up](docs/screenshots/02-sign-up.png) | [Dashboard](docs/screenshots/03-dashboard.png) |
 | [Post list](docs/screenshots/04-posts.png) | [Post details](docs/screenshots/05-post-detail.png) | [Post editor](docs/screenshots/06-post-editor.png) |
 | [Validation](docs/screenshots/07-validation.png) | [Tags](docs/screenshots/08-tags.png) | [Users](docs/screenshots/09-users.png) |
+| [Trash](docs/screenshots/10-trash.png) | | |
 
 ## Implementation and tests
 
